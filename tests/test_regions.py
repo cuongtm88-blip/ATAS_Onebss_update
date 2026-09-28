@@ -11,8 +11,11 @@ def test_current_catalog_enables_only_north():
     assert catalog.default_region == "north"
     assert catalog.get("north").enabled is True
     assert catalog.get("north").config_path.name == "config.toml"
+    assert catalog.get("north").update_repository == "cuongtm88-blip/ATAS_Onebss_update"
     assert catalog.get("central").enabled is False
+    assert catalog.get("central").update_repository.endswith("_MienTrung")
     assert catalog.get("south").enabled is False
+    assert catalog.get("south").update_repository.endswith("_MienNam")
 
 
 def test_enabled_region_requires_existing_config(tmp_path):

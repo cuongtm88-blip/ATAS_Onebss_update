@@ -13,6 +13,12 @@ quy tắc dự án và `config.toml` được đóng gói công khai theo xác n
 hoặc khóa Supabase vào repository. Khóa Supabase chỉ được cung cấp qua biến môi
 trường trên máy chạy chương trình.
 
+Từ phiên bản 0.9.17, giao diện có nút `Kiểm tra phiên bản`. Nút kiểm tra GitHub
+Release của miền đang chọn; khi có phiên bản mới, người dùng xác nhận tải và cài.
+Gói được xác minh bằng SHA-256 trước khi thay ứng dụng. Chỉ hỗ trợ cập nhật tự
+động trên bản đã đóng gói cho macOS arm64 và Windows x64; nếu chưa có Release mới,
+ứng dụng sẽ báo không có bản phát hành mới hơn.
+
 Công cụ tự động đọc các phiếu đang hiển thị trên OneBSS, đối chiếu quy tắc trong
 `Giao phiếu.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
 Google Sheet theo tháng giao phiếu, rồi bấm `Gửi SMS`.

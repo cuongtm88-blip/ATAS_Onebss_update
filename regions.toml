@@ -6,15 +6,18 @@ name = "Miền Bắc"
 enabled = true
 config = "config.toml"
 description = "Đang hoạt động với nhân sự và quy tắc hiện tại."
+update_repository = "cuongtm88-blip/ATAS_Onebss_update"
 
 [regions.central]
 name = "Miền Trung"
 enabled = false
 config = "regions/central/config.toml"
 description = "Chưa có danh sách nhân sự và quy tắc giao phiếu."
+update_repository = "cuongtm88-blip/ATAS_Onebss_update_MienTrung"
 
 [regions.south]
 name = "Miền Nam"
 enabled = false
 config = "regions/south/config.toml"
 description = "Chưa có danh sách nhân sự và quy tắc giao phiếu."
+update_repository = "cuongtm88-blip/ATAS_Onebss_update_MienNam"

@@ -16,6 +16,7 @@ class Region:
     enabled: bool
     config_path: Path
     description: str = ""
+    update_repository: str = ""
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ def load_regions(path: str | Path) -> RegionCatalog:
             enabled=bool(raw.get("enabled", False)),
             config_path=(root / config_value).resolve(),
             description=str(raw.get("description", "")).strip(),
+            update_repository=str(raw.get("update_repository", "")).strip(),
         )
         if region.enabled and not region.config_path.exists():
             raise RegionError(

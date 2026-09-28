@@ -72,6 +72,15 @@ from .telegram import (
     save_bot_token,
     send_message,
 )
+from .updater import (
+    UpdateError,
+    UpdateRelease,
+    detect_install_target,
+    download_asset,
+    latest_update,
+    launch_installer,
+    stage_update,
+)
 
 
 APP_NAME = "ATS OneBSS"
@@ -249,6 +258,11 @@ class TelegramSignals(QObject):
     completed = Signal(bool, str)
 
 
+class UpdateSignals(QObject):
+    checked = Signal(object, str)
+    staged = Signal(object, str)
+
+
 class Card(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -279,6 +293,8 @@ class ATSOneBSSWindow(QMainWindow):
         self.skipped_csv_path: Path | None = None
         self.skipped_csv_stamp: tuple[int, int] | None = None
         self.telegram_signals = TelegramSignals(self)
+        self.update_signals = UpdateSignals(self)
+        self._update_busy = False
         self.closing_after_stop = False
 
         self.setWindowTitle(f"{APP_NAME} {__version__}")
@@ -291,6 +307,8 @@ class ATSOneBSSWindow(QMainWindow):
         self._build_ui()
         self._connect_process()
         self.telegram_signals.completed.connect(self._telegram_test_completed)
+        self.update_signals.checked.connect(self._version_check_completed)
+        self.update_signals.staged.connect(self._update_download_completed)
         self.skipped_timer = QTimer(self)
         self.skipped_timer.setInterval(2000)
         self.skipped_timer.timeout.connect(self._refresh_skipped_csv)
@@ -405,6 +423,11 @@ class ATSOneBSSWindow(QMainWindow):
             "File sẽ được kiểm tra trước khi thay thế."
         )
         region_row.addWidget(self.update_rules_button)
+        self.update_version_button = QPushButton("Kiểm tra phiên bản")
+        self.update_version_button.setToolTip(
+            "Kiểm tra GitHub Release của miền đang chọn và cài bản mới nếu có."
+        )
+        region_row.addWidget(self.update_version_button)
         region_row.addStretch(1)
         self.status_label = QLabel("Đã dừng")
         self.status_label.setObjectName("status")
@@ -566,6 +589,7 @@ class ATSOneBSSWindow(QMainWindow):
         self.member_list.itemSelectionChanged.connect(self._save_settings)
         self.cycle_minutes.valueChanged.connect(lambda _value: self._save_settings())
         self.update_rules_button.clicked.connect(self._update_rules_file)
+        self.update_version_button.clicked.connect(self._check_version_update)
         self.copy_log_button.clicked.connect(self._copy_log)
         self.open_log_button.clicked.connect(self._open_log_file)
         self.refresh_skipped_button.clicked.connect(
@@ -756,6 +780,154 @@ class ATSOneBSSWindow(QMainWindow):
             f"\nĐang dùng: {config.rules_file}"
             f"{backup_message}",
         )
+
+    def _check_version_update(self) -> None:
+        region = self._selected_region()
+        if not region or not region.enabled:
+            return
+        if self.process.state() != QProcess.NotRunning:
+            QMessageBox.warning(
+                self,
+                "Đang chạy",
+                "Hãy dừng tác vụ trước khi cập nhật ứng dụng.",
+            )
+            return
+        if not region.update_repository:
+            QMessageBox.information(
+                self, "Chưa cấu hình", f"Chưa cấu hình kho cập nhật cho {region.name}."
+            )
+            return
+        if self._update_busy:
+            return
+        self._update_busy = True
+        self.update_version_button.setText("Đang kiểm tra…")
+        self._set_process_controls(False)
+        repository = region.update_repository
+        current_version = __version__
+        self._append_log(
+            f"Đang kiểm tra phiên bản {current_version} trên GitHub ({repository})…"
+        )
+
+        def check() -> None:
+            try:
+                release = latest_update(repository, current_version)
+                self.update_signals.checked.emit(release, "")
+            except Exception as error:
+                self.update_signals.checked.emit(None, str(error))
+
+        threading.Thread(target=check, name="ats-version-check", daemon=True).start()
+
+    def _version_check_completed(self, release: object, error: str) -> None:
+        if error:
+            self._append_log(f"Kiểm tra phiên bản thất bại: {error}")
+            QMessageBox.warning(self, "Không kiểm tra được phiên bản", error)
+            self._update_busy = False
+            self.update_version_button.setText("Kiểm tra phiên bản")
+            self._set_process_controls(self.process.state() != QProcess.NotRunning)
+            return
+        if release is None:
+            self._append_log(
+                f"Không tìm thấy bản phát hành mới trên GitHub; "
+                f"phiên bản hiện tại là {__version__}."
+            )
+            QMessageBox.information(
+                self,
+                "Không có bản mới",
+                f"Không có bản phát hành mới hơn trên GitHub. Phiên bản hiện tại: {__version__}.",
+            )
+            self._update_busy = False
+            self.update_version_button.setText("Kiểm tra phiên bản")
+            self._set_process_controls(self.process.state() != QProcess.NotRunning)
+            return
+
+        assert isinstance(release, UpdateRelease)
+        notes = release.notes or "Không có ghi chú phát hành."
+        prompt = QMessageBox(self)
+        prompt.setWindowTitle("Có phiên bản mới")
+        prompt.setIcon(QMessageBox.Information)
+        prompt.setText(
+            f"Có phiên bản {release.version} (hiện tại {__version__}).\n"
+            "Tải và cài đặt ngay?"
+        )
+        prompt.setInformativeText(notes[:4000])
+        prompt.setTextFormat(Qt.PlainText)
+        prompt.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        prompt.setDefaultButton(QMessageBox.No)
+        if prompt.exec() != QMessageBox.Yes:
+            self._append_log(f"Đã hoãn cập nhật lên {release.version}.")
+            self._update_busy = False
+            self.update_version_button.setText("Kiểm tra phiên bản")
+            self._set_process_controls(self.process.state() != QProcess.NotRunning)
+            return
+        try:
+            target = detect_install_target()
+        except UpdateError as target_error:
+            self._append_log(f"Không thể tự cài bản mới: {target_error}")
+            QMessageBox.warning(self, "Không thể tự cài đặt", str(target_error))
+            self._update_busy = False
+            self.update_version_button.setText("Kiểm tra phiên bản")
+            self._set_process_controls(self.process.state() != QProcess.NotRunning)
+            return
+
+        self.update_version_button.setText("Đang tải…")
+        self._append_log(
+            f"Đang tải ATS OneBSS {release.version}; xác minh SHA-256 trước khi cài."
+        )
+
+        def download_and_stage() -> None:
+            try:
+                archive = download_asset(release, user_data_root() / "updates")
+                result = stage_update(archive, target, release.version)
+                self.update_signals.staged.emit(result, "")
+            except Exception as stage_error:
+                self.update_signals.staged.emit(None, str(stage_error))
+
+        threading.Thread(
+            target=download_and_stage,
+            name=f"ats-update-{release.version}",
+            daemon=True,
+        ).start()
+
+    def _update_download_completed(self, result: object, error: str) -> None:
+        if error:
+            self._append_log(f"Tải/cài đặt bản mới thất bại: {error}")
+            QMessageBox.critical(self, "Không cập nhật được", error)
+            self._update_busy = False
+            self.update_version_button.setText("Kiểm tra phiên bản")
+            self._set_process_controls(self.process.state() != QProcess.NotRunning)
+            return
+        if not isinstance(result, tuple) or len(result) != 2:
+            self._update_busy = False
+            self.update_version_button.setText("Kiểm tra phiên bản")
+            self._set_process_controls(self.process.state() != QProcess.NotRunning)
+            QMessageBox.critical(self, "Lỗi cập nhật", "Không nhận được gói cài đặt hợp lệ.")
+            return
+        staged_app, backup_path = result
+        try:
+            target = detect_install_target()
+            launch_installer(
+                staged_app,
+                backup_path,
+                target,
+                script_directory=user_data_root() / "updates",
+            )
+        except Exception as install_error:
+            self._append_log(f"Không thể khởi chạy trình cài bản mới: {install_error}")
+            QMessageBox.critical(self, "Không cập nhật được", str(install_error))
+            self._update_busy = False
+            self.update_version_button.setText("Kiểm tra phiên bản")
+            self._set_process_controls(self.process.state() != QProcess.NotRunning)
+            return
+        self._append_log(
+            f"Đã chuẩn bị bản cập nhật. Trình cài sẽ thay thế ứng dụng sau khi thoát; "
+            f"bản sao lưu: {backup_path}."
+        )
+        QMessageBox.information(
+            self,
+            "Đang cập nhật",
+            "Gói đã tải và xác minh. Ứng dụng sẽ đóng, được cập nhật rồi mở lại.",
+        )
+        QTimer.singleShot(300, QApplication.instance().quit)
 
     def _start(self, mode: str) -> None:
         region = self._selected_region()
@@ -1176,17 +1348,23 @@ class ATSOneBSSWindow(QMainWindow):
     def _set_process_controls(self, running: bool) -> None:
         region = self._selected_region()
         enabled_region = bool(region and region.enabled)
-        self.login_button.setEnabled(enabled_region and not running)
-        self.plan_button.setEnabled(enabled_region and not running)
-        self.start_button.setEnabled(enabled_region and not running)
+        idle = not running and not self._update_busy
+        self.login_button.setEnabled(enabled_region and idle)
+        self.plan_button.setEnabled(enabled_region and idle)
+        self.start_button.setEnabled(enabled_region and idle)
         self.stop_button.setEnabled(running)
         self.finish_login_button.setEnabled(
             running and self.process_mode == "login"
         )
-        self.region_combo.setEnabled(not running)
-        self.member_list.setEnabled(not running)
-        self.cycle_minutes.setEnabled(enabled_region and not running)
-        self.update_rules_button.setEnabled(enabled_region and not running)
+        self.region_combo.setEnabled(idle)
+        self.member_list.setEnabled(idle)
+        self.cycle_minutes.setEnabled(enabled_region and idle)
+        self.update_rules_button.setEnabled(enabled_region and idle)
+        self.update_version_button.setEnabled(
+            enabled_region
+            and bool(region.update_repository)
+            and idle
+        )
         for widget in (
             self.telegram_enabled,
             self.telegram_token,
@@ -1194,7 +1372,7 @@ class ATSOneBSSWindow(QMainWindow):
             self.save_telegram_button,
             self.test_telegram_button,
         ):
-            widget.setEnabled(enabled_region and not running)
+            widget.setEnabled(enabled_region and idle)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.process.state() != QProcess.NotRunning:

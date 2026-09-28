@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "ats-onebss"
-version = "0.9.19"
+version = "0.9.20"
 source = { editable = "." }
 dependencies = [
     { name = "openpyxl" },

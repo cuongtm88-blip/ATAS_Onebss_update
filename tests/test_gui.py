@@ -57,6 +57,46 @@ def test_vinaphone_logo_is_available():
     assert (gui.resource_root() / "assets" / "vinaphone-logo.png").is_file()
 
 
+def test_region_catalog_fills_missing_update_repo_without_overwriting_user_value(tmp_path):
+    (tmp_path / "config.toml").write_text("", encoding="utf-8")
+    runtime_catalog = tmp_path / "runtime-regions.toml"
+    runtime_catalog.write_text(
+        '''default_region = "north"
+[regions.north]
+name = "Miền Bắc"
+enabled = true
+config = "config.toml"
+[regions.central]
+name = "Miền Trung"
+enabled = false
+config = "central.toml"
+update_repository = "owner/custom-central"
+''',
+        encoding="utf-8",
+    )
+    packaged_catalog = tmp_path / "packaged-regions.toml"
+    packaged_catalog.write_text(
+        '''default_region = "north"
+[regions.north]
+name = "Miền Bắc"
+enabled = true
+config = "config.toml"
+update_repository = "owner/north"
+[regions.central]
+name = "Miền Trung"
+enabled = false
+config = "central.toml"
+update_repository = "owner/central"
+''',
+        encoding="utf-8",
+    )
+
+    catalog = gui.load_app_region_catalog(runtime_catalog, packaged_catalog)
+
+    assert catalog.get("north").update_repository == "owner/north"
+    assert catalog.get("central").update_repository == "owner/custom-central"
+
+
 def test_prepare_runtime_root_refreshes_newer_editable_rules(monkeypatch, tmp_path):
     project = tmp_path / "project"
     resources = tmp_path / "resources"

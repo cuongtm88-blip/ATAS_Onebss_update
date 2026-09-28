@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import unicodedata
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -156,6 +157,32 @@ def prepare_runtime_root() -> Path:
     return target
 
 
+def load_app_region_catalog(
+    runtime_catalog_path: str | Path,
+    packaged_catalog_path: str | Path | None = None,
+) -> RegionCatalog:
+    """Keep user region settings while filling newer bundled updater feeds."""
+    catalog = load_regions(runtime_catalog_path)
+    defaults_path = Path(packaged_catalog_path or resource_root() / "regions.toml")
+    if not defaults_path.is_file():
+        return catalog
+    defaults = load_regions(defaults_path)
+    default_repositories = {
+        region.key: region.update_repository for region in defaults.regions
+    }
+    regions = tuple(
+        replace(
+            region,
+            update_repository=(
+                region.update_repository
+                or default_repositories.get(region.key, "")
+            ),
+        )
+        for region in catalog.regions
+    )
+    return RegionCatalog(catalog.root, catalog.default_region, regions)
+
+
 def install_rules_file(source: str | Path, target: str | Path) -> Path | None:
     """Validate and atomically replace the active Excel rule file.
 
@@ -284,7 +311,7 @@ class ATSOneBSSWindow(QMainWindow):
         super().__init__()
         self.runtime_root = runtime_root
         self.catalog_path = runtime_root / "regions.toml"
-        self.catalog: RegionCatalog = load_regions(self.catalog_path)
+        self.catalog: RegionCatalog = load_app_region_catalog(self.catalog_path)
         self.region_by_index: list[Region] = []
         self.member_names: tuple[str, ...] = ()
         self.process = QProcess(self)

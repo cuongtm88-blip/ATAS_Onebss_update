@@ -23,6 +23,9 @@ Phiên bản 0.9.19 bổ sung phục hồi OneBSS bị treo: tải lại trang t
 lại Chromium cùng hồ sơ đăng nhập nếu trang không hồi phục; sau đó mở lại OneBSS,
 Google Sheet và tiếp tục chu kỳ tự động.
 
+Phiên bản 0.9.20 bổ sung dự phòng nguồn GitHub Release từ cấu hình đóng gói nếu
+`regions.toml` cũ trong Application Support chưa có địa chỉ repository cập nhật.
+
 Công cụ tự động đọc các phiếu đang hiển thị trên OneBSS, đối chiếu quy tắc trong
 `Giao phiếu.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
 Google Sheet theo tháng giao phiếu, rồi bấm `Gửi SMS`.

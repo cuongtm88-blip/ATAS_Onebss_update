@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import threading
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -128,6 +129,15 @@ def prepare_runtime_root() -> Path:
     target.mkdir(parents=True, exist_ok=True)
     for relative in RESOURCE_FILES:
         source_file = source / relative
+        if not source_file.exists():
+            wanted_name = unicodedata.normalize("NFC", source_file.name)
+            try:
+                source_file = next(
+                    item for item in source.iterdir()
+                    if unicodedata.normalize("NFC", item.name) == wanted_name
+                )
+            except (FileNotFoundError, StopIteration):
+                pass
         target_file = target / relative
         if source_file.exists() and not target_file.exists():
             target_file.parent.mkdir(parents=True, exist_ok=True)

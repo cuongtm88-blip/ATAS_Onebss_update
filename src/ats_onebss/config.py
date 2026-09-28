@@ -3,6 +3,7 @@ from __future__ import annotations
 import tomllib
 import os
 import socket
+import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -70,7 +71,22 @@ def load_config(path: str | Path) -> Config:
     }
     if any(not name or ratio <= 0 for name, ratio in member_target_ratios.items()):
         raise ValueError("balance.member_target_ratios phải có tên và hệ số lớn hơn 0")
-    resolve = lambda value: (root / value).resolve()
+    def resolve(value: str) -> Path:
+        candidate = root / value
+        if candidate.exists():
+            return candidate.resolve()
+        # Windows filesystems may normalize decomposed Unicode filenames to
+        # NFC when checking out the repository. Resolve configured resource
+        # names by their canonical Unicode form as a portable fallback.
+        wanted_name = unicodedata.normalize("NFC", candidate.name)
+        try:
+            match = next(
+                item for item in candidate.parent.iterdir()
+                if unicodedata.normalize("NFC", item.name) == wanted_name
+            )
+        except (FileNotFoundError, StopIteration):
+            return candidate.resolve()
+        return match.resolve()
     project_rules_value = rules.get("projects_file", "project_rules.toml")
     return Config(
         root=root,

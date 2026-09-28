@@ -1,0 +1,219 @@
+# Quy tắc ưu tiên được xét trước quy tắc nhân sự theo từng dịch vụ trong Excel.
+# Tên trường hỗ trợ: subscriber_name, customer_name, labor_address,
+# connection_address, labor_province. Mọi dự án có route_field = labor_address
+# sẽ kiểm tra Địa chỉ LĐ trước, rồi tự dự phòng bằng Tỉnh LĐ.
+
+[[projects]]
+name = "Đài THVN"
+priority = 100
+match_fields = ["subscriber_name"]
+contains = "Đài THVN"
+fixed_assignee = "Nguyễn Hoàng Dương"
+
+[[projects]]
+name = "Đài Phát Thanh - Truyền Hình Hà Nội"
+priority = 100
+match_fields = ["customer_name"]
+contains = "ĐÀI PHÁT THANH - TRUYỀN HÌNH HÀ NỘI"
+fixed_assignee = "Nguyễn Hoàng Dương"
+
+[[projects]]
+name = "Cục Quản Trị NHNN - Kênh phục vụ HNTH"
+priority = 95
+match_fields = ["customer_name"]
+contains = "Cục Quản Trị Ngân Hàng Nhà Nước Việt Nam"
+required_contains = { notes = "Kênh phục vụ HNTH" }
+fixed_assignee = "Nguyễn Hoàng Dương"
+
+[[projects]]
+name = "Dự án BCA"
+priority = 90
+# OneBSS có thể hiển thị tên khách hàng ở cột Tên KH hoặc Tên thuê bao.
+match_fields = ["customer_name", "subscriber_name"]
+contains = "Cục Viễn Thông & Cơ Yếu Bca"
+route_field = "labor_address"
+
+[[projects.routes]]
+assignee = "Vũ Thế Ninh"
+locations = [
+  "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
+  "Thái Bình", "Điện Biên",
+]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = [
+  "Ninh Bình", "Nam Định", "Hà Nam", "Bắc Ninh", "Bắc Giang", "TP BG", "Hà Nội",
+  "Lai Châu",
+]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = [
+  "Sơn La", "Cao Bằng", "Lào Cai", "Yên Bái", "Phú Thọ", "Hòa Bình",
+  "Vĩnh Phúc",
+]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = [
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+]
+
+[[projects.routes]]
+assignee = "Lê Đức Vinh"
+locations = ["Nghệ An", "Hà Tĩnh"]
+
+[[projects]]
+name = "Dự án Vietlott"
+priority = 90
+match_fields = ["customer_name"]
+contains = "Công Ty Cổ Phần Đầu Tư Kỹ Thuật Berjaya Gia Thịnh"
+route_field = "labor_address"
+
+[[projects.routes]]
+assignee = "Vũ Thế Ninh"
+locations = ["Hưng Yên", "Thái Bình", "Điện Biên", "Hải Phòng", "Hải Dương", "Lào Cai", "Yên Bái"]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = ["Thái Nguyên", "Bắc Kạn", "Lai Châu", "Ninh Bình", "Nam Định", "Hà Nam"]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = ["Tuyên Quang"]
+subscriber_prefixes = ["bgt5"]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = ["Sơn La", "Cao Bằng", "Phú Thọ", "Vĩnh Phúc", "Hòa Bình"]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = ["Bắc Ninh", "Bắc Giang", "Nghệ An", "Quảng Ninh"]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = ["Tuyên Quang"]
+subscriber_prefixes = ["bgt2"]
+
+[[projects.routes]]
+assignee = "Lê Đức Vinh"
+locations = ["Hà Tĩnh", "Hà Nội", "Lạng Sơn", "Thanh Hóa", "Hà Giang"]
+
+[[projects]]
+name = "Dự án BTC"
+priority = 90
+match_fields = ["customer_name"]
+contains = [
+  "Tổng Cục Dự Trữ Nhà Nước",
+  "Cục Công Nghệ Thông Tin & Thống Kê Hải Quan",
+]
+route_field = "labor_address"
+
+[[projects.routes]]
+assignee = "Vũ Thế Ninh"
+locations = [
+  "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
+  "Thái Bình", "Điện Biên",
+]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = [
+  "Ninh Bình", "Nam Định", "Hà Nam", "Bắc Ninh", "Bắc Giang", "TP BG", "Hà Nội",
+  "Lai Châu",
+]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = [
+  "Sơn La", "Cao Bằng", "Lào Cai", "Yên Bái", "Phú Thọ", "Hòa Bình",
+  "Vĩnh Phúc",
+]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = [
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+]
+
+[[projects.routes]]
+assignee = "Lê Đức Vinh"
+locations = ["Nghệ An", "Hà Tĩnh"]
+
+[[projects]]
+name = "Dự án BTC"
+priority = 90
+match_fields = ["customer_name"]
+contains = "Tổng Cục Thuế"
+route_field = "labor_address"
+
+[[projects.routes]]
+assignee = "Vũ Thế Ninh"
+locations = [
+  "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
+  "Thái Bình", "Điện Biên",
+]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = [
+  "Ninh Bình", "Nam Định", "Hà Nam", "Bắc Ninh", "Bắc Giang", "TP BG", "Hà Nội",
+  "Lai Châu",
+]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = [
+  "Sơn La", "Cao Bằng", "Lào Cai", "Yên Bái", "Phú Thọ", "Hòa Bình",
+  "Vĩnh Phúc",
+]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = [
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+]
+
+[[projects.routes]]
+assignee = "Lê Đức Vinh"
+locations = ["Nghệ An", "Hà Tĩnh"]
+
+[[projects]]
+name = "Dự án Cục BĐTW"
+priority = 90
+match_fields = ["customer_name"]
+contains = "Cục BĐTW"
+route_field = "labor_address"
+
+[[projects.routes]]
+assignee = "Vũ Thế Ninh"
+locations = [
+  "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
+  "Thái Bình", "Điện Biên",
+]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = [
+  "Ninh Bình", "Nam Định", "Hà Nam", "Bắc Ninh", "Bắc Giang", "TP BG", "Hà Nội",
+  "Lai Châu",
+]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = [
+  "Sơn La", "Cao Bằng", "Lào Cai", "Yên Bái", "Phú Thọ", "Hòa Bình",
+  "Vĩnh Phúc",
+]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = [
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+]
+
+[[projects.routes]]
+assignee = "Lê Đức Vinh"
+locations = ["Nghệ An", "Hà Tĩnh"]

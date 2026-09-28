@@ -1,0 +1,20 @@
+version = 1
+default_region = "north"
+
+[regions.north]
+name = "Miền Bắc"
+enabled = true
+config = "config.toml"
+description = "Đang hoạt động với nhân sự và quy tắc hiện tại."
+
+[regions.central]
+name = "Miền Trung"
+enabled = false
+config = "regions/central/config.toml"
+description = "Chưa có danh sách nhân sự và quy tắc giao phiếu."
+
+[regions.south]
+name = "Miền Nam"
+enabled = false
+config = "regions/south/config.toml"
+description = "Chưa có danh sách nhân sự và quy tắc giao phiếu."

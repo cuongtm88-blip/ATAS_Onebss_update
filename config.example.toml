@@ -1,0 +1,50 @@
+[onebss]
+url = "https://onebss.vnpt.vn/#/admin/frmGiaoViecVIP?tag=0"
+browser_profile = ".browser-profile"
+headless = false
+browser_channel = "chrome"
+task = "Kiểm tra và xử lý"
+batch_size = 20
+timeout_ms = 30000
+
+[rules]
+file = "Giao phiếu.xlsx"
+projects_file = "project_rules.toml"
+use_backup_members = true
+
+[balance.member_target_ratios]
+"Lương Tuấn Thanh" = 1.10
+"Đào Anh Vũ" = 1.10
+"Nguyễn Hoàng Dương" = 1.10
+"Đoàn Hải Hà" = 1.05
+"Nguyễn Duy Thành" = 1.05
+"Ngọc Thành Kiên" = 1.05
+
+[google_sheet]
+url = "https://docs.google.com/spreadsheets/d/1giulYOsX2gjqmgrLqk9fyiOePNhMe-lJ6IIm8cBDBZI/edit?usp=sharing"
+sheet_name = "Tháng 8/2026"
+sheet_name_template = "Tháng {month}/{year}"
+data_start_row = 9
+# Thứ tự cột sẽ ghi, bắt đầu từ cột A của dòng mới.
+columns = [
+  "transaction_id", "subscriber_id", "service", "assignee",
+  "subscriber_name", "contract_type", "labor_address", "labor_province",
+  "project_name",
+]
+
+[runtime]
+database = "ats_onebss.db"
+preview_csv = "preview_assignments.csv"
+timezone = "Asia/Ho_Chi_Minh"
+poll_interval_minutes = 15
+error_retry_seconds = 3
+
+[dashboard]
+# Tạm tắt. Đặt true khi muốn nối lại phân hệ Giao phiếu trên website.
+enabled = false
+# URL Supabase của website Dashboard_KPIs. Khóa service-role tuyệt đối không
+# ghi vào file này; chỉ đặt trong biến môi trường trên máy chạy ATS-OneBSS.
+supabase_url = "https://oshrbmebtzacrfedwucl.supabase.co"
+service_key_env = "ATS_ONEBSS_SUPABASE_SERVICE_KEY"
+worker_id = "may-giao-phieu-01"
+command_poll_seconds = 5

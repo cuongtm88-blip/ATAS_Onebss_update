@@ -19,6 +19,10 @@ Gói được xác minh bằng SHA-256 trước khi thay ứng dụng. Chỉ h�
 động trên bản đã đóng gói cho macOS arm64 và Windows x64; nếu chưa có Release mới,
 ứng dụng sẽ báo không có bản phát hành mới hơn.
 
+Phiên bản 0.9.19 bổ sung phục hồi OneBSS bị treo: tải lại trang trước, rồi khởi động
+lại Chromium cùng hồ sơ đăng nhập nếu trang không hồi phục; sau đó mở lại OneBSS,
+Google Sheet và tiếp tục chu kỳ tự động.
+
 Công cụ tự động đọc các phiếu đang hiển thị trên OneBSS, đối chiếu quy tắc trong
 `Giao phiếu.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
 Google Sheet theo tháng giao phiếu, rồi bấm `Gửi SMS`.

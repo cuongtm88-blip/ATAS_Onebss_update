@@ -1,5 +1,6 @@
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -35,6 +36,40 @@ def test_unique_tickets_keeps_only_one_visible_duplicate_per_cycle():
     ]
 
 
+def test_recover_browser_restarts_context_when_page_reload_fails(monkeypatch):
+    calls = []
+
+    class FakeSession:
+        async def restart_context(self):
+            calls.append("restart")
+
+    page = SimpleNamespace(wait_for_selector=AsyncMock())
+    onebss = SimpleNamespace(
+        page=page,
+        reload_for_recovery=AsyncMock(side_effect=RuntimeError("overlay stuck")),
+        open=AsyncMock(),
+        ensure_unassigned_filters=AsyncMock(),
+        refresh_tickets=AsyncMock(),
+    )
+    async def open_onebss():
+        calls.append("open-onebss")
+        onebss.page = page
+
+    onebss.open.side_effect = open_onebss
+    sheet = SimpleNamespace(page=object(), open=AsyncMock())
+    monkeypatch.setattr(cli, "sync_pending", AsyncMock())
+    config = SimpleNamespace(timeout_ms=30000)
+
+    asyncio.run(cli.recover_browser(
+        config, FakeSession(), onebss, sheet, object(), object()
+    ))
+
+    assert calls == ["restart", "open-onebss"]
+    assert sheet.page is None
+    sheet.open.assert_awaited_once()
+    cli.sync_pending.assert_awaited_once()
+    onebss.ensure_unassigned_filters.assert_awaited_once()
+    onebss.refresh_tickets.assert_awaited_once()
 def test_completed_duplicate_is_released_when_visible_count_decreases():
     processed = {"GD1|TB1", "GD2|TB2"}
     cli._release_completed_occurrences(

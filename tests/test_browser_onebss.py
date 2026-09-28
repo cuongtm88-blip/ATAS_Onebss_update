@@ -32,6 +32,62 @@ def test_profile_lock_prevents_two_sessions(tmp_path: Path):
         first._release_profile_lock()
 
 
+def test_browser_session_can_restart_context_without_releasing_profile_lock():
+    class FakeContext:
+        def __init__(self):
+            self.close = AsyncMock()
+            self.set_default_timeout = lambda _timeout: None
+            self.grant_permissions = AsyncMock()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **_kwargs):
+            return replacement
+
+    replacement = FakeContext()
+    previous = FakeContext()
+    session = BrowserSession(SimpleNamespace(
+        browser_profile=Path("/tmp/profile"),
+        browser_channel="chrome",
+        headless=False,
+        timeout_ms=30000,
+    ))
+    session.context = previous
+    session.playwright = SimpleNamespace(chromium=FakeChromium())
+    session._profile_lock = object()
+
+    asyncio.run(session.restart_context())
+
+    previous.close.assert_awaited_once()
+    replacement.grant_permissions.assert_awaited_once()
+    assert session.context is replacement
+    assert session._profile_lock is not None
+
+
+def test_onebss_reload_for_recovery_rebuilds_unassigned_queue():
+    page = SimpleNamespace(
+        is_closed=lambda: False,
+        reload=AsyncMock(),
+        wait_for_selector=AsyncMock(),
+        wait_for_timeout=AsyncMock(),
+    )
+    config = SimpleNamespace(timeout_ms=30000)
+    client = OneBSSClient(SimpleNamespace(config=config))
+    client.page = page
+    client.ensure_unassigned_filters = AsyncMock()
+    client.refresh_tickets = AsyncMock()
+
+    asyncio.run(client.reload_for_recovery())
+
+    page.reload.assert_awaited_once_with(
+        wait_until="domcontentloaded", timeout=30000
+    )
+    page.wait_for_selector.assert_awaited_once_with(
+        "#frmGiaoViecVIP", timeout=30000
+    )
+    client.ensure_unassigned_filters.assert_awaited_once()
+    client.refresh_tickets.assert_awaited_once()
+
+
 def test_reads_contract_type_from_raw_onebss_response():
     payload = {
         "data": [

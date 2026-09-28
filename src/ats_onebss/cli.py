@@ -502,6 +502,43 @@ async def open_clients(
     return onebss, sheet
 
 
+async def recover_browser(
+    config: Config,
+    session: BrowserSession,
+    onebss: OneBSSClient,
+    sheet: GoogleSheetClient,
+    ledger: Ledger,
+    dashboard: DashboardClient,
+) -> None:
+    """Reload OneBSS first, restarting the shared browser context if needed."""
+    try:
+        await onebss.reload_for_recovery()
+        print("OneBSS đã tải lại; tiếp tục quy trình tự động.")
+        return
+    except Exception as reload_error:
+        print(
+            f"Tải lại tab OneBSS không phục hồi được ({reload_error}); "
+            "đang khởi động lại Chromium..."
+        )
+
+    await session.restart_context()
+    onebss.page = None
+    sheet.page = None
+    timeout_ms = max(15_000, config.timeout_ms)
+    try:
+        await onebss.open()
+        await onebss.page.wait_for_selector("#frmGiaoViecVIP", timeout=timeout_ms)
+        await sheet.open()
+        await sync_pending(config, sheet, ledger, dashboard)
+        await onebss.ensure_unassigned_filters()
+        await onebss.refresh_tickets()
+    except Exception as restart_error:
+        raise RuntimeError(
+            f"Không phục hồi được sau khi khởi động lại Chromium: {restart_error}"
+        ) from restart_error
+    print("Đã khởi động lại Chromium, khôi phục các tab và tải lại hàng đợi.")
+
+
 async def command_run(config: Config) -> None:
     ledger = Ledger(config.database)
     dashboard = DashboardClient(config)
@@ -708,10 +745,14 @@ async def command_watch(config: Config) -> None:
                 except Exception as sheet_error:
                     print(f"Chưa phục hồi được Google Sheet, sẽ tiếp tục thử: {sheet_error}")
                 try:
-                    await onebss.refresh_tickets()
-                except Exception as refresh_error:
-                    print(f"Không tải lại được OneBSS: {refresh_error}")
-                    await onebss.open()
+                    await recover_browser(
+                        config, session, onebss, sheet, ledger, dashboard
+                    )
+                except Exception as recovery_error:
+                    print(f"Không phục hồi được OneBSS: {recovery_error}")
+                    await notify_telegram_error(
+                        telegram, "Không phục hồi được phiên OneBSS", recovery_error
+                    )
                 next_automatic_cycle = asyncio.get_running_loop().time()
                 continue
               next_run = datetime.now(ZoneInfo(config.timezone)).timestamp() + interval_seconds
@@ -751,7 +792,17 @@ async def command_watch(config: Config) -> None:
                     await notify_telegram_error(
                         telegram, "Không tải lại được phiên OneBSS", error
                     )
-                    await onebss.open()
+                    try:
+                        await recover_browser(
+                            config, session, onebss, sheet, ledger, dashboard
+                        )
+                    except Exception as recovery_error:
+                        print(f"Không phục hồi được OneBSS: {recovery_error}")
+                        await notify_telegram_error(
+                            telegram,
+                            "Không phục hồi được phiên OneBSS",
+                            recovery_error,
+                        )
 
 
 def parser() -> argparse.ArgumentParser:

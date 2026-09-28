@@ -132,6 +132,35 @@ class BrowserSession:
                 self.playwright = None
             self._release_profile_lock()
 
+    async def restart_context(self) -> None:
+        """Restart Chromium while retaining this session's profile lock."""
+        if not self.playwright:
+            raise RuntimeError("Không thể khởi động lại Chromium khi Playwright chưa chạy")
+        context = self.context
+        self.context = None
+        if context:
+            try:
+                await context.close()
+            except Exception:
+                pass
+        try:
+            self.context = await self.playwright.chromium.launch_persistent_context(
+                user_data_dir=self.config.browser_profile,
+                channel=self.config.browser_channel,
+                headless=self.config.headless,
+                viewport={"width": 1920, "height": 1000},
+                ignore_default_args=["--enable-automation"],
+                args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
+            )
+            self.context.set_default_timeout(self.config.timeout_ms)
+            await self.context.grant_permissions(
+                ["clipboard-read", "clipboard-write"],
+                origin="https://docs.google.com",
+            )
+        except Exception:
+            self.context = None
+            raise
+
     async def page_for(self, url_fragment: str) -> Page:
         assert self.context
         for page in self.context.pages:
@@ -760,6 +789,20 @@ class OneBSSClient:
         page = self.page or await self.open()
         print("Đăng nhập OneBSS trong cửa sổ Chromium nếu được yêu cầu...")
         await page.wait_for_selector("#frmGiaoViecVIP", timeout=0)
+
+    async def reload_for_recovery(self) -> None:
+        """Reload OneBSS and rebuild its unassigned-ticket snapshot."""
+        if not self.page or self.page.is_closed():
+            raise RuntimeError("Tab OneBSS đã đóng")
+        timeout_ms = max(15_000, self.session.config.timeout_ms)
+        print("OneBSS có dấu hiệu bị treo; đang tải lại tab trình duyệt...")
+        await self.page.reload(
+            wait_until="domcontentloaded", timeout=timeout_ms
+        )
+        await self.page.wait_for_selector("#frmGiaoViecVIP", timeout=timeout_ms)
+        await self.page.wait_for_timeout(1_000)
+        await self.ensure_unassigned_filters()
+        await self.refresh_tickets()
 
     async def session_expiry_epoch(self) -> int | None:
         """Read only expiration metadata for OneBSS auth tokens/cookies."""

@@ -29,6 +29,10 @@ class BrowserProfileInUseError(RuntimeError):
     """The configured Chromium profile is already owned by another session."""
 
 
+class OneBSSLoginError(RuntimeError):
+    """OneBSS rejected or did not complete an automated login attempt."""
+
+
 class BrowserSession:
     def __init__(self, config: Config):
         self.config = config
@@ -789,6 +793,143 @@ class OneBSSClient:
         page = self.page or await self.open()
         print("Đăng nhập OneBSS trong cửa sổ Chromium nếu được yêu cầu...")
         await page.wait_for_selector("#frmGiaoViecVIP", timeout=0)
+
+    async def login_with_otp(
+        self, username: str, password: str, otp_provider,
+    ) -> None:
+        """Submit saved credentials, request OTP, and verify the work screen."""
+        page = await self.open()
+        if await self.session_is_logged_in():
+            return
+
+        await self._wait_for_login_form(30)
+        if await self.session_is_logged_in():
+            return
+
+        password_field = page.locator('input[type="password"]:visible').first
+        if await password_field.count() == 0:
+            raise OneBSSLoginError("Không nhận diện được ô mật khẩu trên trang OneBSS.")
+        user_candidates = (
+            'input[autocomplete="username"]:visible',
+            'input[type="email"]:visible',
+            'input[name*="user" i]:visible',
+            'input[id*="user" i]:visible',
+            'input[type="text"]:visible',
+        )
+        username_field = None
+        for selector in user_candidates:
+            candidate = page.locator(selector).first
+            if await candidate.count():
+                username_field = candidate
+                break
+        if username_field is None:
+            raise OneBSSLoginError("Không nhận diện được ô tài khoản trên trang OneBSS.")
+
+        try:
+            await username_field.fill(username)
+            await password_field.fill(password)
+            form = password_field.locator("xpath=ancestor::form[1]")
+            submit = form.locator('button[type="submit"], input[type="submit"]').first
+            if not await submit.count():
+                submit = page.get_by_role(
+                    "button", name=re.compile(r"đăng nhập|log\s*in|sign\s*in|tiếp tục", re.I)
+                ).first
+            if await submit.count() and await submit.is_visible():
+                await submit.click()
+            else:
+                await password_field.press("Enter")
+            await self._wait_for_auth_transition(60)
+            if await self.session_is_logged_in():
+                return
+
+            otp_fields = await self._visible_otp_fields()
+            if not otp_fields:
+                raise OneBSSLoginError(
+                    "OneBSS chưa hiện ô OTP sau khi gửi tài khoản và mật khẩu."
+                )
+            print("OneBSS yêu cầu OTP; đang chờ mã từ Telegram (không ghi mã vào log).")
+            code = await otp_provider()
+            if not re.fullmatch(r"\d{4,8}", str(code)):
+                raise OneBSSLoginError("Mã OTP Telegram không đúng định dạng.")
+            if len(otp_fields) > 1:
+                for field, digit in zip(otp_fields, code):
+                    await field.fill(digit)
+            else:
+                await otp_fields[0].fill(code)
+            form = otp_fields[0].locator("xpath=ancestor::form[1]")
+            submit = form.locator('button[type="submit"], input[type="submit"]').first
+            if not await submit.count():
+                submit = page.get_by_role(
+                    "button", name=re.compile(r"xác nhận|verify|submit|tiếp tục|continue", re.I)
+                ).first
+            if await submit.count() and await submit.is_visible():
+                await submit.click()
+            else:
+                await otp_fields[-1].press("Enter")
+            await self._wait_for_auth_transition(60)
+            if not await self.session_is_logged_in():
+                raise OneBSSLoginError("OneBSS không xác nhận đăng nhập thành công.")
+        except OneBSSLoginError:
+            raise
+        except Exception as error:
+            # Do not expose locator values, which can include user input.
+            raise OneBSSLoginError(
+                f"Không hoàn tất được đăng nhập OneBSS ({type(error).__name__})."
+            ) from None
+
+    async def _visible_otp_fields(self) -> list[Locator]:
+        assert self.page
+        selectors = (
+            'input[autocomplete="one-time-code"]:visible',
+            'input[name*="otp" i]:visible',
+            'input[id*="otp" i]:visible',
+            'input[placeholder*="otp" i]:visible',
+            'input[placeholder*="mã xác" i]:visible',
+            'input[name*="code" i]:visible',
+            'input[id*="code" i]:visible',
+            'input[maxlength="4"]:visible, input[maxlength="5"]:visible, '
+            'input[maxlength="6"]:visible, input[maxlength="7"]:visible, '
+            'input[maxlength="8"]:visible',
+            'input[inputmode="numeric"][maxlength="1"]:visible',
+        )
+        for selector in selectors:
+            locator = self.page.locator(selector)
+            count = await locator.count()
+            if count:
+                return [locator.nth(index) for index in range(min(count, 8))]
+        # Many VNPT sign-in pages use an unlabelled numeric code field.
+        candidates = self.page.locator(
+            'input[type="text"][inputmode="numeric"]:visible, '
+            'input[type="tel"]:visible'
+        )
+        return [candidates.nth(index) for index in range(await candidates.count())]
+
+    async def _wait_for_auth_transition(self, timeout_seconds: int) -> None:
+        assert self.page
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if await self.session_is_logged_in() or await self._visible_otp_fields():
+                return
+            if await self.page.locator('input[type="password"]:visible').count():
+                # Give the page a moment to render its inline credential error.
+                alerts = self.page.locator('[role="alert"], .alert-danger, .validation-summary-errors')
+                if await alerts.count() and (await alerts.first.inner_text()).strip():
+                    raise OneBSSLoginError("OneBSS không chấp nhận thông tin đăng nhập.")
+            await self.page.wait_for_timeout(500)
+        if await self.page.locator('input[type="password"]:visible').count():
+            raise OneBSSLoginError("OneBSS không chấp nhận thông tin đăng nhập.")
+
+    async def _wait_for_login_form(self, timeout_seconds: int) -> None:
+        assert self.page
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if await self.session_is_logged_in():
+                return
+            if await self.page.locator('input[type="password"]:visible').count():
+                return
+            if await self._visible_otp_fields():
+                return
+            await self.page.wait_for_timeout(500)
 
     async def reload_for_recovery(self) -> None:
         """Reload OneBSS and rebuild its unassigned-ticket snapshot."""

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from urllib.error import HTTPError, URLError
@@ -131,6 +133,100 @@ def send_message(token: str, chat_id: str, message: str, timeout: int = 12) -> N
             "Telegram không xác nhận gửi tin: "
             + str(payload.get("description", "Không rõ nguyên nhân"))
         )
+
+
+def _telegram_updates(token: str, offset: int | None, timeout: int) -> list[dict]:
+    query = {"timeout": max(0, min(timeout, 25)), "allowed_updates": '["message"]'}
+    if offset is not None:
+        query["offset"] = offset
+    request = Request(
+        f"https://api.telegram.org/bot{token.strip()}/getUpdates?{urlencode(query)}",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with _updates_lock():
+            with urlopen(request, timeout=max(5, timeout + 5)) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        try:
+            detail = json.loads(error.read().decode("utf-8")).get("description", "")
+        except (ValueError, OSError, AttributeError):
+            detail = ""
+        if "webhook" in str(detail).casefold():
+            raise TelegramError(
+                "Bot Telegram đang bật webhook nên không thể nhận OTP bằng getUpdates."
+            ) from None
+        raise TelegramError("Không đọc được mã OTP từ Telegram.") from None
+    except (URLError, TimeoutError, OSError, ValueError) as error:
+        raise TelegramError("Không đọc được mã OTP từ Telegram.") from error
+    if not payload.get("ok") or not isinstance(payload.get("result"), list):
+        raise TelegramError("Telegram không trả về danh sách tin nhắn OTP hợp lệ.")
+    return payload["result"]
+
+
+@contextmanager
+def _updates_lock():
+    """Serialize Telegram long-poll requests shared by the GUI and worker."""
+    if sys.platform != "darwin":
+        yield
+        return
+    import fcntl
+    from pathlib import Path
+
+    lock_path = (
+        Path.home()
+        / "Library"
+        / "Application Support"
+        / "ATS-OneBSS"
+        / "telegram-getupdates.lock"
+    )
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _otp_from_update(update: dict, allowed_chat_id: str) -> str | None:
+    message = update.get("message") or update.get("channel_post") or {}
+    chat = message.get("chat") or {}
+    if str(chat.get("id", "")) != str(allowed_chat_id).strip():
+        return None
+    if chat.get("type") not in (None, "private"):
+        return None
+    text = str(message.get("text", "")).strip()
+    match = re.fullmatch(r"(?:/otp(?:@\w+)?\s+)?(\d{4,8})", text, re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def wait_for_otp(
+    token: str, chat_id: str, region_name: str = "Miền Bắc",
+    timeout_seconds: int = 180,
+) -> str:
+    """Accept only a numeric OTP sent by the configured Telegram chat."""
+    deadline = time.monotonic() + timeout_seconds
+    updates = _telegram_updates(token, None, 0)
+    offset = max((int(item.get("update_id", -1)) for item in updates), default=-1) + 1
+    send_message(
+        token,
+        chat_id,
+        f"🔐 ATS OneBSS — {region_name}\nOneBSS đang chờ mã OTP. "
+        "Hãy gửi riêng mã số (4–8 chữ số) hoặc /otp <mã> trong cuộc trò chuyện này. "
+        "Mã OTP không được ghi vào nhật ký.",
+    )
+    while time.monotonic() < deadline:
+        updates = _telegram_updates(token, offset, min(25, int(deadline - time.monotonic())))
+        for update in updates:
+            try:
+                offset = max(offset, int(update.get("update_id", -1)) + 1)
+            except (TypeError, ValueError):
+                continue
+            code = _otp_from_update(update, chat_id)
+            if code:
+                return code
+    raise TelegramError("Hết thời gian chờ OTP Telegram (3 phút).")
 
 
 @dataclass

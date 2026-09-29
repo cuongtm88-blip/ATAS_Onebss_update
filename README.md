@@ -26,9 +26,34 @@ Google Sheet và tiếp tục chu kỳ tự động.
 Phiên bản 0.9.20 bổ sung dự phòng nguồn GitHub Release từ cấu hình đóng gói nếu
 `regions.toml` cũ trong Application Support chưa có địa chỉ repository cập nhật.
 
+Phiên bản 0.9.21 bổ sung tùy chọn lưu thông tin đăng nhập OneBSS trong kho bảo
+mật của hệ điều hành. Khi phiên hết hạn trong chế độ tự động, ứng dụng thử đăng
+nhập lại tối đa 3 lần; OTP được gửi qua Telegram và chỉ nhận từ Chat ID đã cấu
+hình. Trong Telegram, gửi mã số 4–8 chữ số hoặc `/otp <mã>`. Nếu hết 3 lần,
+worker dừng để tránh khóa tài khoản.
+
+Phiên bản 0.9.24 bổ sung listener Telegram nền trên macOS. Khi Telegram được bật, gửi `/resume` từ chat riêng có Chat ID đã cấu hình để mở lại ATS OneBSS và tiếp tục tự động giao phiếu. Máy Mac cần đang bật, người dùng macOS còn đăng nhập; listener nền hoạt động sau khi đã mở app ít nhất một lần.
+
+Phiên bản 0.9.23 tự động hoàn tất lưu phiên và bắt đầu giao phiếu sau khi đăng nhập OneBSS/Google Sheets thành công.
+
+Phiên bản 0.9.22 áp dụng cùng quy trình đăng nhập tự động và nhận OTP qua Telegram
+khi bấm nút `Đăng nhập`; nếu chưa lưu thông tin hoặc chưa bật Telegram, vẫn cho phép
+đăng nhập thủ công như trước.
+
 Công cụ tự động đọc các phiếu đang hiển thị trên OneBSS, đối chiếu quy tắc trong
 `Giao phiếu.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
 Google Sheet theo tháng giao phiếu, rồi bấm `Gửi SMS`.
+
+Khi cần đồng bộ song song sang API nhận phiếu, mở tab `API nhận phiếu`, nhập
+`X-Ingest-Token` do quản trị API cấp và bật gửi cho miền cần dùng. Token được lưu
+trong Keychain macOS hoặc mã hóa bằng Windows DPAPI, không lưu trong file cài đặt
+hay nhật ký. Sau khi OneBSS xác nhận giao, ứng dụng gửi các field `Ngày giao`,
+`Mã giao dịch`, `Mã thuê bao`, `Dịch vụ`, `Người thực hiện`, `Trạng thái`
+(`Chưa xử lý`), cùng `Tỉnh` và `Tên dự án` nếu có. Gửi API và ghi Google Sheet
+độc lập; lỗi API được giữ trong hàng đợi cục bộ để thử lại ở lần đồng bộ tiếp theo.
+
+Phiên bản 0.9.25 bổ sung đồng bộ phiếu đã giao sang API nhận phiếu, giữ hàng đợi
+thử lại độc lập với Google Sheets và lưu API Token trong kho bảo mật hệ điều hành.
 
 ## Nguyên tắc phân bổ
 

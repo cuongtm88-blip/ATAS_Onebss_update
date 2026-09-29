@@ -109,7 +109,13 @@ def test_watch_retries_failed_cycle_without_normal_interval(tmp_path, monkeypatc
         def __init__(self):
             self.refreshes = 0
 
+        async def session_is_logged_in(self):
+            return True
+
         async def refresh_tickets(self):
+            self.refreshes += 1
+
+        async def reload_for_recovery(self):
             self.refreshes += 1
 
         async def open(self):
@@ -145,3 +151,81 @@ def test_watch_retries_failed_cycle_without_normal_interval(tmp_path, monkeypatc
     assert attempts == 2
     assert delays == [3]
     assert onebss.refreshes == 1
+
+
+def test_automatic_login_stops_after_three_attempts(monkeypatch):
+    attempts = []
+    delays = []
+
+    class FakeOneBSS:
+        page = None
+
+        async def login_with_otp(self, username, password, _otp_provider):
+            assert (username, password) == ("operator", "secret")
+            attempts.append(1)
+            raise RuntimeError("login failed")
+
+        async def open(self):
+            return None
+
+    async def fake_sleep(seconds):
+        delays.append(seconds)
+
+    monkeypatch.setattr(cli.asyncio, "sleep", fake_sleep)
+    with pytest.raises(RuntimeError, match="sau 3 lần"):
+        asyncio.run(
+            cli.authenticate_with_retries(
+                FakeOneBSS(), "operator", "secret", cli.TelegramNotifier()
+            )
+        )
+
+    assert len(attempts) == 3
+    assert delays == [3, 10]
+
+
+def test_login_command_uses_saved_credentials_and_telegram_otp(monkeypatch, capsys):
+    events = []
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class FakeOneBSS:
+        async def open(self):
+            return None
+
+        async def session_is_logged_in(self):
+            return False
+
+        async def session_expiry_epoch(self):
+            return 1_800_000_000
+
+        async def wait_until_logged_in(self):
+            pytest.fail("should use saved credentials when Telegram is enabled")
+
+    class FakeSheet:
+        async def open(self):
+            events.append("sheet-ready")
+            return None
+
+    notifier = cli.TelegramNotifier(token="TOKEN", chat_id="123")
+    monkeypatch.setattr(cli, "BrowserSession", lambda _config: FakeSession())
+    monkeypatch.setattr(cli, "OneBSSClient", lambda _session: FakeOneBSS())
+    monkeypatch.setattr(cli, "GoogleSheetClient", lambda _session: FakeSheet())
+    monkeypatch.setattr(cli, "load_credentials", lambda _region: ("user", "pass"))
+    monkeypatch.setattr(
+        cli.TelegramNotifier, "from_environment", classmethod(lambda _cls: notifier)
+    )
+
+    async def fake_authenticate(_onebss, username, password, _telegram):
+        events.append((username, password))
+
+    monkeypatch.setattr(cli, "authenticate_with_retries", fake_authenticate)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "")
+    asyncio.run(cli.command_login(SimpleNamespace()))
+
+    assert events == [("user", "pass"), "sheet-ready"]
+    assert "ATS_ONEBSS_LOGIN_READY=1" in capsys.readouterr().out

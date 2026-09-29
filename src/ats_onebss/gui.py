@@ -63,6 +63,13 @@ from PySide6.QtWidgets import (
 
 from . import __version__
 from .config import load_config
+from .credentials import (
+    CredentialStoreError,
+    load_credentials,
+    load_ingest_api_token,
+    save_credentials,
+    save_ingest_api_token,
+)
 from .regions import Region, RegionCatalog, RegionError, load_regions
 from .rules import load_project_rules, load_rules
 from .telegram import (
@@ -83,6 +90,7 @@ from .updater import (
     launch_installer,
     stage_update,
 )
+from .ingest import INGEST_API_TOKEN_ENV
 
 
 APP_NAME = "ATS OneBSS"
@@ -316,6 +324,7 @@ class ATSOneBSSWindow(QMainWindow):
         self.member_names: tuple[str, ...] = ()
         self.process = QProcess(self)
         self.process_mode = ""
+        self._login_ready_to_auto_start = False
         self._output_decoder = codecs.getincrementaldecoder("utf-8")(
             errors="replace"
         )
@@ -333,6 +342,7 @@ class ATSOneBSSWindow(QMainWindow):
         self.update_signals = UpdateSignals(self)
         self._update_busy = False
         self.closing_after_stop = False
+        self.worker_state_path: Path | None = None
 
         self.setWindowTitle(f"{APP_NAME} {__version__}")
         logo_path = resource_root() / "assets" / "vinaphone-logo.png"
@@ -354,6 +364,10 @@ class ATSOneBSSWindow(QMainWindow):
         self.session_timer.setInterval(1000)
         self.session_timer.timeout.connect(self._update_session_countdown)
         self.session_timer.start()
+        self.remote_resume_timer = QTimer(self)
+        self.remote_resume_timer.setInterval(1500)
+        self.remote_resume_timer.timeout.connect(self._check_remote_resume_request)
+        self.remote_resume_timer.start()
         self._select_initial_region()
 
     def _apply_styles(self) -> None:
@@ -583,7 +597,8 @@ class ATSOneBSSWindow(QMainWindow):
         telegram_help = QLabel(
             "Gửi cảnh báo khi phiên OneBSS sắp hết hạn hoặc đã hết hạn, "
             "chu kỳ gặp lỗi, hay tiến trình dừng bất thường. "
-            "Bot Token được lưu trong Keychain macOS, không ghi vào file cấu hình."
+            "Bot Token được lưu trong Keychain macOS, không ghi vào file cấu hình. "
+            "Trên macOS, gửi /resume để khởi động lại từ xa; chỉ Chat ID đã cấu hình được phép."
         )
         telegram_help.setWordWrap(True)
         telegram_help.setObjectName("subtitle")
@@ -611,6 +626,66 @@ class ATSOneBSSWindow(QMainWindow):
         telegram_layout.addStretch(1)
         self.detail_tabs.addTab(telegram_page, "Telegram")
 
+        ingest_page = QWidget()
+        ingest_layout = QVBoxLayout(ingest_page)
+        ingest_layout.setContentsMargins(16, 14, 16, 14)
+        ingest_help = QLabel(
+            "Gửi phiếu đã giao lên API đồng thời với Google Sheets. "
+            "Trạng thái mặc định là ‘Chưa xử lý’; Tỉnh và Tên dự án được gửi "
+            "nếu có. Token được lưu trong Keychain macOS hoặc mã hóa bằng "
+            "Windows DPAPI, không ghi vào file cấu hình hay nhật ký."
+        )
+        ingest_help.setWordWrap(True)
+        ingest_help.setObjectName("subtitle")
+        ingest_layout.addWidget(ingest_help)
+        ingest_form = QFormLayout()
+        self.ingest_enabled = QCheckBox("Bật gửi phiếu lên API cho miền này")
+        ingest_form.addRow("Trạng thái:", self.ingest_enabled)
+        self.ingest_token = QLineEdit()
+        self.ingest_token.setEchoMode(QLineEdit.Password)
+        self.ingest_token.setPlaceholderText("X-Ingest-Token")
+        ingest_form.addRow("API Token:", self.ingest_token)
+        ingest_layout.addLayout(ingest_form)
+        ingest_buttons = QHBoxLayout()
+        self.save_ingest_button = QPushButton("Lưu cấu hình API")
+        self.ingest_result = QLabel("")
+        self.ingest_result.setWordWrap(True)
+        ingest_buttons.addWidget(self.save_ingest_button)
+        ingest_buttons.addWidget(self.ingest_result, 1)
+        ingest_layout.addLayout(ingest_buttons)
+        ingest_layout.addStretch(1)
+        self.detail_tabs.addTab(ingest_page, "API nhận phiếu")
+
+        login_page = QWidget()
+        login_layout = QVBoxLayout(login_page)
+        login_layout.setContentsMargins(16, 14, 16, 14)
+        login_help = QLabel(
+            "Thông tin được lưu trong Keychain macOS hoặc kho bảo vệ Windows, "
+            "không ghi vào cấu hình hay nhật ký. Khi OneBSS yêu cầu OTP, bot "
+            "chỉ chấp nhận mã gửi từ Chat ID Telegram đã cấu hình."
+        )
+        login_help.setWordWrap(True)
+        login_help.setObjectName("subtitle")
+        login_layout.addWidget(login_help)
+        login_form = QFormLayout()
+        self.onebss_username = QLineEdit()
+        self.onebss_username.setPlaceholderText("Tài khoản OneBSS")
+        login_form.addRow("Tài khoản:", self.onebss_username)
+        self.onebss_password = QLineEdit()
+        self.onebss_password.setEchoMode(QLineEdit.Password)
+        self.onebss_password.setPlaceholderText("Mật khẩu OneBSS")
+        login_form.addRow("Mật khẩu:", self.onebss_password)
+        login_layout.addLayout(login_form)
+        login_buttons = QHBoxLayout()
+        self.save_onebss_credentials_button = QPushButton("Lưu thông tin đăng nhập")
+        self.onebss_credentials_result = QLabel("")
+        self.onebss_credentials_result.setWordWrap(True)
+        login_buttons.addWidget(self.save_onebss_credentials_button)
+        login_buttons.addWidget(self.onebss_credentials_result, 1)
+        login_layout.addLayout(login_buttons)
+        login_layout.addStretch(1)
+        self.detail_tabs.addTab(login_page, "Đăng nhập OneBSS")
+
         detail_layout.addWidget(self.detail_tabs, 1)
         splitter.addWidget(detail_card)
         splitter.setSizes([310, 740])
@@ -636,6 +711,10 @@ class ATSOneBSSWindow(QMainWindow):
         self.skipped_table.itemSelectionChanged.connect(self._show_skipped_detail)
         self.save_telegram_button.clicked.connect(self._save_telegram_settings)
         self.test_telegram_button.clicked.connect(self._test_telegram)
+        self.save_onebss_credentials_button.clicked.connect(
+            self._save_onebss_credentials
+        )
+        self.save_ingest_button.clicked.connect(self._save_ingest_settings)
         self._set_process_controls(False)
 
     def _connect_process(self) -> None:
@@ -750,6 +829,8 @@ class ATSOneBSSWindow(QMainWindow):
         except (TypeError, ValueError):
             self.cycle_minutes.setValue(default_interval)
         self._load_telegram_settings(region)
+        self._load_onebss_credentials(region)
+        self._load_ingest_settings(region)
         self._refresh_skipped_csv(force=True)
         self.settings["last_region"] = region.key
         self._set_process_controls(False)
@@ -984,13 +1065,28 @@ class ATSOneBSSWindow(QMainWindow):
             load_config(region.config_path)
             self._save_settings()
         except Exception as error:
+            if self.worker_state_path:
+                self.worker_state_path.unlink(missing_ok=True)
+                self.worker_state_path = None
             QMessageBox.critical(self, "Cấu hình không hợp lệ", str(error))
             return
         try:
             self._persist_telegram_settings(show_result=False)
         except TelegramError as error:
+            if self.worker_state_path:
+                self.worker_state_path.unlink(missing_ok=True)
+                self.worker_state_path = None
             QMessageBox.warning(self, "Telegram chưa hợp lệ", str(error))
             self.detail_tabs.setCurrentIndex(2)
+            return
+        try:
+            self._persist_ingest_settings(show_result=False)
+        except CredentialStoreError as error:
+            if self.worker_state_path:
+                self.worker_state_path.unlink(missing_ok=True)
+                self.worker_state_path = None
+            QMessageBox.warning(self, "API Token chưa hợp lệ", str(error))
+            self.detail_tabs.setCurrentIndex(3)
             return
 
         command = worker_command(
@@ -1008,8 +1104,14 @@ class ATSOneBSSWindow(QMainWindow):
             environment.insert(TELEGRAM_TOKEN_ENV, token)
             environment.insert(TELEGRAM_CHAT_ID_ENV, chat_id)
             environment.insert(TELEGRAM_REGION_ENV, region.name)
+        if self.ingest_enabled.isChecked():
+            environment.insert(
+                INGEST_API_TOKEN_ENV, self.ingest_token.text().strip()
+            )
+        environment.insert("ATS_ONEBSS_REGION_KEY", region.key)
         self.process.setProcessEnvironment(environment)
         self.process_mode = mode
+        self._login_ready_to_auto_start = False
         self.closing_after_stop = False
         self._output_decoder = codecs.getincrementaldecoder("utf-8")(
             errors="replace"
@@ -1018,15 +1120,24 @@ class ATSOneBSSWindow(QMainWindow):
         self._session_expiry_epoch = None
         self._session_expiry_unknown = False
         self._session_expired = False
+        self.worker_state_path = user_data_root() / f"{region.key}-worker-state.json"
+        self.worker_state_path.write_text(
+            json.dumps({"starting": True}), encoding="utf-8"
+        )
         self.process.start(command[0], command[1:])
         if not self.process.waitForStarted(5000):
             self.process_mode = ""
+            self.worker_state_path.unlink(missing_ok=True)
+            self.worker_state_path = None
             QMessageBox.critical(
                 self,
                 "Không khởi động được",
                 self.process.errorString() or "Không tạo được tiến trình nền.",
             )
             return
+        self.worker_state_path.write_text(
+            json.dumps({"pid": int(self.process.processId())}), encoding="utf-8"
+        )
 
         label = {
             "login": "Đang chờ đăng nhập",
@@ -1094,6 +1205,13 @@ class ATSOneBSSWindow(QMainWindow):
                 continue
             if clean == "ATS_ONEBSS_SESSION_STATE=expired":
                 self._session_expired = True
+                continue
+            if clean == "ATS_ONEBSS_LOGIN_READY=1":
+                self._login_ready_to_auto_start = True
+                self._append_log(
+                    "OneBSS và Google Sheets đã sẵn sàng; tự động lưu phiên..."
+                )
+                self._finish_login()
                 continue
             visible.append(line)
         if visible:
@@ -1244,6 +1362,149 @@ class ATSOneBSSWindow(QMainWindow):
             self.test_telegram_button,
         ):
             widget.setEnabled(region.enabled)
+        self._ensure_remote_supervisor(region)
+
+    def _ensure_remote_supervisor(self, region: Region) -> None:
+        if sys.platform != "darwin" or not region.enabled:
+            return
+        values = (
+            self.settings.get("regions", {})
+            .get(region.key, {})
+            .get("telegram", {})
+        )
+        if not values.get("enabled") or not values.get("chat_id"):
+            return
+        try:
+            if not load_bot_token(region.key):
+                return
+        except TelegramError as error:
+            self._append_log(f"Không khởi động được giám sát Telegram: {error}")
+            return
+        command = (
+            [sys.executable, "--supervisor", region.key]
+            if getattr(sys, "frozen", False)
+            else [
+                sys.executable, "-m", "ats_onebss.gui_main",
+                "--supervisor", region.key,
+            ]
+        )
+        try:
+            subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                close_fds=True,
+            )
+            self._append_log(
+                f"Đã bật listener Telegram nền cho lệnh /resume ({region.name})."
+            )
+        except OSError as error:
+            self._append_log(f"Không khởi động được giám sát Telegram: {error}")
+
+    def _check_remote_resume_request(self) -> None:
+        if self.process.state() != QProcess.NotRunning:
+            return
+        data_root = user_data_root()
+        for request_path in sorted(data_root.glob("remote-resume-*.json")):
+            try:
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                region_key = str(request.get("region", ""))
+            except (OSError, ValueError, TypeError):
+                request_path.unlink(missing_ok=True)
+                continue
+            region = next(
+                (item for item in self.region_by_index if item.key == region_key), None
+            )
+            if not region or not region.enabled:
+                request_path.unlink(missing_ok=True)
+                continue
+            request_path.unlink(missing_ok=True)
+            index = self.region_by_index.index(region)
+            if self.region_combo.currentIndex() != index:
+                self.region_combo.setCurrentIndex(index)
+            self._append_log(f"Nhận lệnh /resume từ Telegram cho {region.name}.")
+            QTimer.singleShot(300, lambda: self._start("run"))
+            return
+
+    def _load_onebss_credentials(self, region: Region) -> None:
+        self.onebss_credentials_result.clear()
+        username = password = ""
+        if region.enabled:
+            try:
+                username, password = load_credentials(region.key)
+            except CredentialStoreError as error:
+                self._append_log(f"Không đọc được thông tin đăng nhập OneBSS: {error}")
+        self.onebss_username.setText(username)
+        self.onebss_password.setText(password)
+        for widget in (
+            self.onebss_username,
+            self.onebss_password,
+            self.save_onebss_credentials_button,
+        ):
+            widget.setEnabled(region.enabled)
+
+    def _load_ingest_settings(self, region: Region) -> None:
+        values = (
+            self.settings.get("regions", {})
+            .get(region.key, {})
+            .get("ingest_api", {})
+        )
+        self.ingest_enabled.setChecked(bool(values.get("enabled", False)))
+        self.ingest_result.clear()
+        token = ""
+        if region.enabled:
+            try:
+                token = load_ingest_api_token(region.key)
+            except CredentialStoreError as error:
+                self._append_log(f"Không đọc được API Token: {error}")
+        self.ingest_token.setText(token)
+        for widget in (self.ingest_enabled, self.ingest_token, self.save_ingest_button):
+            widget.setEnabled(region.enabled)
+
+    def _persist_ingest_settings(self, show_result: bool) -> None:
+        region = self._selected_region()
+        if not region or not region.enabled:
+            return
+        token = self.ingest_token.text().strip()
+        enabled = self.ingest_enabled.isChecked()
+        if enabled and not token:
+            raise CredentialStoreError("Hãy nhập API Token trước khi bật gửi API.")
+        if token:
+            save_ingest_api_token(region.key, token)
+        region_settings = self.settings.setdefault("regions", {}).setdefault(
+            region.key, {}
+        )
+        region_settings["ingest_api"] = {"enabled": enabled}
+        self._save_settings()
+        if show_result:
+            self.ingest_result.setStyleSheet("color: #16794b;")
+            self.ingest_result.setText("Đã lưu cấu hình API an toàn cho miền này.")
+
+    def _save_ingest_settings(self) -> None:
+        try:
+            self._persist_ingest_settings(show_result=True)
+        except CredentialStoreError as error:
+            self.ingest_result.setStyleSheet("color: #b42318;")
+            self.ingest_result.setText(str(error))
+
+    def _save_onebss_credentials(self) -> None:
+        region = self._selected_region()
+        if not region or not region.enabled:
+            return
+        try:
+            save_credentials(
+                region.key,
+                self.onebss_username.text(),
+                self.onebss_password.text(),
+            )
+        except CredentialStoreError as error:
+            self.onebss_credentials_result.setStyleSheet("color: #b42318;")
+            self.onebss_credentials_result.setText(str(error))
+            return
+        self.onebss_credentials_result.setStyleSheet("color: #16794b;")
+        self.onebss_credentials_result.setText("Đã lưu trong kho bảo mật của hệ điều hành.")
 
     def _persist_telegram_settings(self, show_result: bool) -> None:
         region = self._selected_region()
@@ -1269,6 +1530,8 @@ class ATSOneBSSWindow(QMainWindow):
         if show_result:
             self.telegram_result.setStyleSheet("color: #16794b;")
             self.telegram_result.setText("Đã lưu cấu hình Telegram.")
+        if enabled:
+            self._ensure_remote_supervisor(region)
 
     def _save_telegram_settings(self) -> None:
         try:
@@ -1357,6 +1620,12 @@ class ATSOneBSSWindow(QMainWindow):
         self, return_code: int, _exit_status: QProcess.ExitStatus
     ) -> None:
         mode = self.process_mode
+        auto_start = bool(
+            mode == "login"
+            and return_code == 0
+            and self._login_ready_to_auto_start
+            and not self.closing_after_stop
+        )
         self._read_process_output()
         self._consume_worker_output(
             self._output_decoder.decode(b"", final=True), final=True
@@ -1369,7 +1638,19 @@ class ATSOneBSSWindow(QMainWindow):
             self.status_label.setText("Đã dừng do lỗi")
             self._append_log(f"Tác vụ kết thúc với mã lỗi {return_code}.")
         self.process_mode = ""
+        self._login_ready_to_auto_start = False
+        if self.worker_state_path:
+            if auto_start:
+                self.worker_state_path.write_text(
+                    json.dumps({"starting": True}), encoding="utf-8"
+                )
+            else:
+                self.worker_state_path.unlink(missing_ok=True)
+                self.worker_state_path = None
         self._set_process_controls(False)
+        if auto_start:
+            self._append_log("Phiên đã lưu; tự động bắt đầu giao phiếu...")
+            QTimer.singleShot(250, lambda: self._start("run"))
         if self.closing_after_stop:
             QApplication.instance().quit()
 
@@ -1410,6 +1691,14 @@ class ATSOneBSSWindow(QMainWindow):
             self.test_telegram_button,
         ):
             widget.setEnabled(enabled_region and idle)
+        for widget in (
+            self.onebss_username,
+            self.onebss_password,
+            self.save_onebss_credentials_button,
+        ):
+            widget.setEnabled(enabled_region and idle)
+        for widget in (self.ingest_enabled, self.ingest_token, self.save_ingest_button):
+            widget.setEnabled(enabled_region and idle)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.process.state() != QProcess.NotRunning:
@@ -1432,7 +1721,7 @@ class ATSOneBSSWindow(QMainWindow):
         event.accept()
 
 
-def run_gui() -> None:
+def run_gui(resume_region: str | None = None) -> None:
     application = QApplication(sys.argv)
     application.setApplicationName(APP_NAME)
     application.setOrganizationName("CNTTDVS")
@@ -1458,4 +1747,18 @@ def run_gui() -> None:
         QMessageBox.critical(None, "Không đọc được cấu hình miền", str(error))
         raise SystemExit(2) from error
     window.show()
+    if resume_region:
+        index = next(
+            (
+                i for i, region in enumerate(window.region_by_index)
+                if region.key == resume_region
+            ),
+            None,
+        )
+        if index is not None and window.region_by_index[index].enabled:
+            window.region_combo.setCurrentIndex(index)
+            window._append_log(
+                f"Đang khởi động giao phiếu từ lệnh Telegram /resume cho {window.region_by_index[index].name}."
+            )
+            QTimer.singleShot(700, lambda: window._start("run"))
     raise SystemExit(application.exec())

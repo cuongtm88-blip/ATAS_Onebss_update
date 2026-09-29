@@ -39,6 +39,7 @@ class Ledger:
                     rule_row INTEGER NOT NULL,
                     onebss_saved INTEGER NOT NULL DEFAULT 0,
                     sheet_saved INTEGER NOT NULL DEFAULT 0,
+                    api_saved INTEGER NOT NULL DEFAULT 1,
                     sms_clicked INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     PRIMARY KEY (ticket_key, assignee)
@@ -49,6 +50,12 @@ class Ledger:
             if "sheet_timestamp" not in columns:
                 db.execute(
                     "ALTER TABLE assignments ADD COLUMN sheet_timestamp TEXT NOT NULL DEFAULT ''"
+                )
+            if "api_saved" not in columns:
+                # Do not enqueue historical assignments when API sync is first
+                # enabled; only assignments staged by the new version opt in.
+                db.execute(
+                    "ALTER TABLE assignments ADD COLUMN api_saved INTEGER NOT NULL DEFAULT 1"
                 )
             if "project_name" not in columns:
                 db.execute(
@@ -224,10 +231,10 @@ class Ledger:
                     INSERT OR IGNORE INTO assignments
                     (ticket_key, transaction_id, subscriber_id, service, assignee, points,
                      rule_row, created_at, sheet_timestamp, project_name, original_assignee,
-                     sheet_ordinal, sheet_existing, sheet_saved, subscriber_name,
+                     sheet_ordinal, sheet_existing, sheet_saved, api_saved, subscriber_name,
                      contract_type, labor_address, labor_province, customer_name,
                      cohort_key)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         ledger_key,
@@ -244,6 +251,7 @@ class Ledger:
                         sheet_ordinal,
                         int(assignment.sheet_existing),
                         int(assignment.sheet_existing or not assignment.write_to_sheet),
+                        0,
                         assignment.ticket.subscriber_name,
                         assignment.ticket.contract_type,
                         assignment.ticket.labor_address,
@@ -291,6 +299,33 @@ class Ledger:
         with self.connect() as db:
             db.execute(
                 f"UPDATE assignments SET sheet_saved = 1 WHERE ticket_key IN ({placeholders})",
+                tuple(ticket_keys),
+            )
+
+    def pending_ingest_rows(self) -> list[dict[str, str]]:
+        with self.connect() as db:
+            rows = db.execute(
+                """
+                SELECT ticket_key, transaction_id, subscriber_id, service,
+                       assignee, sheet_timestamp, labor_province, project_name
+                FROM assignments
+                WHERE onebss_saved = 1 AND api_saved = 0
+                ORDER BY created_at, ticket_key, assignee
+                """
+            ).fetchall()
+        keys = (
+            "ticket_key", "transaction_id", "subscriber_id", "service",
+            "assignee", "sheet_timestamp", "labor_province", "project_name",
+        )
+        return [dict(zip(keys, row, strict=True)) for row in rows]
+
+    def mark_ingest_keys(self, ticket_keys: set[str]) -> None:
+        if not ticket_keys:
+            return
+        placeholders = ",".join("?" for _ in ticket_keys)
+        with self.connect() as db:
+            db.execute(
+                f"UPDATE assignments SET api_saved = 1 WHERE ticket_key IN ({placeholders})",
                 tuple(ticket_keys),
             )
 

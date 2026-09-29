@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import os
 import shutil
 from collections import Counter
 from dataclasses import replace
@@ -12,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from .browser import BrowserSession, GoogleSheetClient, OneBSSClient
 from .config import Config, load_config
+from .credentials import load_credentials
 from .dashboard import DashboardClient
 from .ledger import Ledger
 from .models import Assignment, Ticket
@@ -30,7 +32,8 @@ from .rules import (
     voice_brandname_mode,
 )
 from .text import normalize, ticket_identity
-from .telegram import TelegramNotifier
+from .telegram import TelegramNotifier, wait_for_otp
+from .ingest import IngestApiClient
 
 
 async def notify_telegram_error(
@@ -316,7 +319,16 @@ async def command_login(config: Config) -> None:
         onebss = OneBSSClient(session)
         sheet = GoogleSheetClient(session)
         await onebss.open()
-        await onebss.wait_until_logged_in()
+        if not await onebss.session_is_logged_in():
+            region_key = os.environ.get("ATS_ONEBSS_REGION_KEY", "north")
+            username, password = load_credentials(region_key)
+            telegram = TelegramNotifier.from_environment()
+            if username and password and telegram.enabled:
+                await authenticate_with_retries(
+                    onebss, username, password, telegram
+                )
+            else:
+                await onebss.wait_until_logged_in()
         expiry = await onebss.session_expiry_epoch()
         print(
             "ATS_ONEBSS_SESSION_EXPIRY="
@@ -324,6 +336,7 @@ async def command_login(config: Config) -> None:
             flush=True,
         )
         await sheet.open()
+        print("ATS_ONEBSS_LOGIN_READY=1", flush=True)
         await asyncio.to_thread(
             input,
             "Đã nhận diện OneBSS và Google Sheets. Nhấn Enter để lưu phiên và đóng Chromium: ",
@@ -357,6 +370,33 @@ async def sync_pending(
     config: Config, sheet: GoogleSheetClient, ledger: Ledger,
     dashboard: DashboardClient,
 ) -> None:
+    ingest = IngestApiClient.from_environment()
+    ingest_pending = ledger.pending_ingest_rows()
+    if ingest.enabled and ingest_pending:
+        try:
+            result = await ingest.push_pending(ingest_pending)
+            invalid_indices = {
+                item.get("index") for item in result.get("invalid", [])
+                if isinstance(item, dict)
+            }
+            valid_keys = {
+                row["ticket_key"] for index, row in enumerate(ingest_pending)
+                if index not in invalid_indices
+            }
+            ledger.mark_ingest_keys(valid_keys)
+            if valid_keys:
+                print(f"Đã đồng bộ {len(valid_keys)} phiếu lên API nhận phiếu.")
+            for item in result.get("invalid", []):
+                if isinstance(item, dict):
+                    print(
+                        "API chưa nhận dòng "
+                        f"{item.get('index', '?')}: {item.get('reason', 'không hợp lệ')}"
+                    )
+        except Exception as error:
+            # API is an independent sink; keep its durable outbox for retry and
+            # do not turn a successful OneBSS/Sheet assignment into a failure.
+            print(f"Chưa đồng bộ được API nhận phiếu; sẽ thử lại: {error}")
+
     pending = ledger.pending_sheet_rows()
     if pending:
         await sheet.append_records(pending)
@@ -490,16 +530,71 @@ async def process_available(
 async def open_clients(
     config: Config, session: BrowserSession, ledger: Ledger,
     dashboard: DashboardClient,
+    telegram: TelegramNotifier | None = None,
+    region_key: str = "north",
 ) -> tuple[OneBSSClient, GoogleSheetClient]:
     onebss = OneBSSClient(session)
     sheet = GoogleSheetClient(session)
     await onebss.open()
-    await onebss.wait_until_logged_in()
+    if not await onebss.session_is_logged_in():
+        username, password = load_credentials(region_key)
+        if username and password and telegram and telegram.enabled:
+            await authenticate_with_retries(onebss, username, password, telegram)
+        else:
+            await onebss.wait_until_logged_in()
     await sheet.open()
     await sync_pending(config, sheet, ledger, dashboard)
     await onebss.ensure_unassigned_filters()
     await onebss.refresh_tickets()
     return onebss, sheet
+
+
+async def authenticate_with_retries(
+    onebss: OneBSSClient,
+    username: str,
+    password: str,
+    telegram: TelegramNotifier,
+) -> None:
+    """Run one bounded login recovery sequence; never retry indefinitely."""
+    delays = (3, 10)
+    region_key = os.environ.get("ATS_ONEBSS_REGION_KEY", "north")
+    for attempt in range(1, 4):
+        try:
+            print(f"Đang đăng nhập lại OneBSS (lần {attempt}/3)...")
+
+            async def obtain_otp() -> str:
+                return await asyncio.to_thread(
+                    wait_for_otp,
+                    telegram.token,
+                    telegram.chat_id,
+                    telegram.region_name,
+                    180,
+                )
+
+            await onebss.login_with_otp(username, password, obtain_otp)
+            print("Đăng nhập lại OneBSS thành công.")
+            return
+        except Exception as error:
+            print(f"Đăng nhập OneBSS lần {attempt}/3 chưa thành công: {error}")
+            if attempt == 3:
+                await notify_telegram_error(
+                    telegram,
+                    f"Tự đăng nhập OneBSS thất bại sau 3 lần — {region_key}",
+                    error,
+                )
+                raise RuntimeError(
+                    "Tự đăng nhập OneBSS thất bại sau 3 lần; đã dừng để tránh khóa tài khoản."
+                ) from None
+            await asyncio.sleep(delays[attempt - 1])
+            try:
+                page = onebss.page
+                if page and not page.is_closed():
+                    await page.goto(
+                        onebss.session.config.onebss_url,
+                        wait_until="domcontentloaded",
+                    )
+            except Exception:
+                await onebss.open()
 
 
 async def recover_browser(
@@ -680,8 +775,11 @@ async def command_watch(config: Config) -> None:
     command_poll_seconds = getattr(config, "dashboard_command_poll_seconds", 5)
     processed: set[str] = set()
     session_state: dict[str, object] = {}
+    region_key = os.environ.get("ATS_ONEBSS_REGION_KEY", "north")
     async with BrowserSession(config) as session:
-        onebss, sheet = await open_clients(config, session, ledger, dashboard)
+        onebss, sheet = await open_clients(
+            config, session, ledger, dashboard, telegram, region_key
+        )
         await monitor_onebss_session(onebss, telegram, session_state)
         if dashboard.enabled:
             await dashboard.heartbeat()
@@ -705,6 +803,30 @@ async def command_watch(config: Config) -> None:
         next_automatic_cycle = 0.0
         while True:
             await monitor_onebss_session(onebss, telegram, session_state)
+            if not await onebss.session_is_logged_in():
+                # Avoid reacting to a transient navigation before starting an
+                # authentication attempt or consuming any Telegram OTP.
+                if onebss.page and not onebss.page.is_closed():
+                    await onebss.page.wait_for_timeout(1500)
+                if not await onebss.session_is_logged_in():
+                    username, password = load_credentials(region_key)
+                    if not username or not password:
+                        raise RuntimeError(
+                            "Phiên OneBSS đã hết nhưng chưa lưu tài khoản/mật khẩu. "
+                            "Hãy đăng nhập thủ công và lưu thông tin trong ứng dụng."
+                        )
+                    if not telegram.enabled:
+                        raise RuntimeError(
+                            "Cần bật Telegram và cấu hình Chat ID để nhận OTP đăng nhập."
+                        )
+                    await authenticate_with_retries(
+                        onebss, username, password, telegram
+                    )
+                    await sheet.open()
+                    await sync_pending(config, sheet, ledger, dashboard)
+                    await onebss.ensure_unassigned_filters()
+                    await onebss.refresh_tickets()
+                    processed.clear()
             now = asyncio.get_running_loop().time()
             if now >= next_automatic_cycle:
               try:

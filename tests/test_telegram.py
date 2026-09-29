@@ -1,4 +1,5 @@
 import ats_onebss.telegram as telegram
+import ats_onebss.remote as remote
 
 
 class FakeResponse:
@@ -31,6 +32,19 @@ def test_send_message_posts_encoded_chat_and_text(monkeypatch):
     assert captured["timeout"] == 12
 
 
+def test_resume_command_requires_configured_private_chat():
+    update = {
+        "message": {
+            "chat": {"id": 12345, "type": "private"},
+            "text": "/resume@atsonebss_bot",
+        }
+    }
+    assert remote._resume_command(update, "12345")
+    assert not remote._resume_command(update, "999")
+    update["message"]["chat"]["type"] = "group"
+    assert not remote._resume_command(update, "12345")
+
+
 def test_notifier_suppresses_immediate_duplicate(monkeypatch):
     messages = []
     monkeypatch.setattr(
@@ -52,3 +66,32 @@ def test_safe_error_redacts_token():
     assert "SECRET" not in telegram._safe_error(
         RuntimeError("URL contains SECRET"), "SECRET"
     )
+
+
+def test_otp_accepts_only_numeric_code_from_configured_chat(monkeypatch):
+    messages = []
+    batches = iter([
+        [{"update_id": 10, "message": {"chat": {"id": 123}, "text": "123456"}}],
+        [
+            {"update_id": 11, "message": {"chat": {"id": 456}, "text": "654321"}},
+            {"update_id": 12, "message": {"chat": {"id": 123}, "text": "/otp 908172"}},
+        ],
+    ])
+    monkeypatch.setattr(telegram, "_telegram_updates", lambda *_args: next(batches))
+    monkeypatch.setattr(
+        telegram, "send_message", lambda _token, _chat, message: messages.append(message)
+    )
+
+    assert telegram.wait_for_otp("TOKEN", "123", "Miền Bắc", 2) == "908172"
+    assert "OTP" in messages[0]
+
+
+def test_otp_parser_rejects_text_and_untrusted_chat():
+    update = {"message": {"chat": {"id": 456}, "text": "111111"}}
+    assert telegram._otp_from_update(update, "123") is None
+    update["message"]["chat"]["id"] = 123
+    update["message"]["text"] = "Mã là 111111"
+    assert telegram._otp_from_update(update, "123") is None
+    update["message"]["text"] = "111111"
+    update["message"]["chat"]["type"] = "group"
+    assert telegram._otp_from_update(update, "123") is None

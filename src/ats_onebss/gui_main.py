@@ -16,6 +16,20 @@ def _configure_worker_streams() -> None:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "--supervisor":
+        from ats_onebss.remote import run_supervisor
+
+        if len(sys.argv) < 3:
+            raise SystemExit("Thiếu mã miền cho Telegram supervisor.")
+        run_supervisor(sys.argv[2])
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == "--resume":
+        if len(sys.argv) < 3:
+            raise SystemExit("Thiếu mã miền để tiếp tục giao phiếu.")
+        region_key = sys.argv[2]
+        del sys.argv[1:3]
+        run_gui(region_key)
+        return
     # The packaged .app also acts as its own background worker. This keeps the
     # macOS distribution to one application while preserving stdout for the UI.
     if len(sys.argv) > 1 and sys.argv[1] == "--worker":

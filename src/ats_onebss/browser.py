@@ -2090,6 +2090,7 @@ class GoogleSheetClient:
                     "labor_address": assignment.ticket.labor_address,
                     "labor_province": assignment.ticket.labor_province,
                     "project_name": assignment.project_name,
+                    "reassignment": "Giao lại" if assignment.sheet_existing else "",
                 }
                 sheet_name = _sheet_name_for_timestamp(
                     assignment.sheet_timestamp,

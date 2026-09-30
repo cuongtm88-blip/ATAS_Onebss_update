@@ -105,6 +105,10 @@ def plan_assignments(
         identity = ticket_identity(ticket.transaction_id, ticket.subscriber_id)
         preferred = preferred_assignees.get(identity)
         on_current_sheet = identity in current_sheet_keys
+        # A previously assigned ticket is always written as a new "Giao lại"
+        # row, even when it was already present on this month's tab. Prior-month
+        # history is also a replay and must not increase this month's score.
+        in_sheet_history = bool(preferred) or on_current_sheet
         try:
             rule = match_rule(rules, ticket)
         except RuleError:
@@ -129,15 +133,15 @@ def plan_assignments(
                 continue
         voice_mode = voice_brandname_mode(rule, ticket)
         # The current VIP state is stronger than Sheet history for supervision.
-        # A returned Giam sat ticket must always go to Le Duc Tuan, while still
-        # being marked as already present on Sheet so it is not appended/scored
-        # a second time. Xu ly keeps the original Sheet assignee when present.
+        # A returned Giam sat ticket must always go to Le Duc Tuan. Replays are
+        # still appended as a new row and marked so they do not affect the score.
+        # Xu ly keeps the original Sheet assignee when present.
         if voice_mode == "giam_sat":
             groups = eligible_members(
                 rule, ticket, use_backups, excluded_names
             )
             project_name = ""
-            sheet_existing = on_current_sheet
+            sheet_existing = in_sheet_history and rule.write_to_sheet
         elif preferred:
             groups = {
                 f"Google Sheet {index}": [assignee]
@@ -150,7 +154,7 @@ def plan_assignments(
             project_name = (
                 project.project_name if project else "Giao lại theo Google Sheet"
             )
-            sheet_existing = on_current_sheet
+            sheet_existing = in_sheet_history
         elif voice_mode == "xu_ly":
             groups = eligible_members(
                 rule, ticket, use_backups, excluded_names
@@ -175,7 +179,7 @@ def plan_assignments(
                     rule, ticket, use_backups, excluded_names
                 )
                 project_name = ""
-            sheet_existing = False
+            sheet_existing = in_sheet_history and rule.write_to_sheet
         eligible_count = sum(len(members) for members in groups.values())
         cohort_key = (
             "" if voice_mode == "giam_sat" else assignment_cohort_key(

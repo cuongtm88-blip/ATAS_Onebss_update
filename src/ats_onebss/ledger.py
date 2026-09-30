@@ -250,7 +250,7 @@ class Ledger:
                         assignee,
                         sheet_ordinal,
                         int(assignment.sheet_existing),
-                        int(assignment.sheet_existing or not assignment.write_to_sheet),
+                        int(not assignment.write_to_sheet),
                         int(not assignment.send_to_api),
                         assignment.ticket.subscriber_name,
                         assignment.ticket.contract_type,
@@ -279,7 +279,9 @@ class Ledger:
                 """
                 SELECT ticket_key, transaction_id, subscriber_id, service, assignee, points,
                        sheet_timestamp, sheet_ordinal, subscriber_name, contract_type,
-                       labor_address, labor_province, project_name
+                       labor_address, labor_province, project_name,
+                       CASE WHEN sheet_existing = 1 THEN 'Giao lại' ELSE '' END
+                           AS reassignment
                 FROM assignments
                 WHERE onebss_saved = 1 AND sheet_saved = 0
                 ORDER BY created_at, ticket_key, assignee
@@ -289,6 +291,7 @@ class Ledger:
             "ticket_key", "transaction_id", "subscriber_id", "service", "assignee",
             "points", "sheet_timestamp", "sheet_ordinal", "subscriber_name",
             "contract_type", "labor_address", "labor_province", "project_name",
+            "reassignment",
         ]
         return [dict(zip(keys, row, strict=True)) for row in rows]
 

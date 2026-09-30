@@ -156,7 +156,7 @@ def write_preview(path: Path, assignments: list[Assignment]) -> None:
                 (
                     "Theo quy tắc - không ghi Google Sheet"
                     if not item.write_to_sheet
-                    else "Đã có - không ghi thêm dòng"
+                    else "Đã có - ghi dòng mới, đánh dấu Giao lại"
                     if item.sheet_existing
                     else "Phiếu mới - sẽ ghi"
                 ),
@@ -496,7 +496,7 @@ async def process_available(
         notices = []
         if repeated:
             notices.append(
-                f"{repeated} phiếu đã có trên Google Sheet, không ghi thêm dòng"
+                f"{repeated} phiếu đã có trên Google Sheet, ghi dòng mới với cột K = Giao lại"
             )
         if omitted:
             notices.append(f"{omitted} phiếu theo quy tắc không ghi Google Sheet")
@@ -518,7 +518,7 @@ async def process_available(
         )
         await sync_pending(config, sheet, ledger, dashboard)
         for assignment in batch:
-            if assignment.sheet_existing or not assignment.write_to_sheet:
+            if not assignment.write_to_sheet:
                 continue
             identity = ticket_identity(
                 assignment.ticket.transaction_id,
@@ -528,9 +528,10 @@ async def process_available(
             current_keys = getattr(sheet_assignees, "current_keys", None)
             if current_keys is not None:
                 current_keys.add(identity)
-            share = assignment.points_per_person
-            for assignee in assignment.assignees:
-                balance_scores[assignee] = balance_scores.get(assignee, 0) + share
+            if not assignment.sheet_existing:
+                share = assignment.points_per_person
+                for assignee in assignment.assignees:
+                    balance_scores[assignee] = balance_scores.get(assignee, 0) + share
         if dashboard.enabled:
             await dashboard.heartbeat()
             await process_reassignment_command(

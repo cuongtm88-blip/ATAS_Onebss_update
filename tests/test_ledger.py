@@ -32,7 +32,7 @@ def test_identical_same_minute_rows_receive_distinct_sheet_ordinals(tmp_path):
     assert [row["sheet_ordinal"] for row in pending] == [1, 2]
 
 
-def test_sheet_existing_occurrence_is_not_appended_or_scored(tmp_path):
+def test_sheet_existing_occurrence_is_appended_as_reassignment_but_not_scored(tmp_path):
     ledger = Ledger(tmp_path / "ledger.db")
     repeated = ledger.stage(
         Assignment(
@@ -45,7 +45,9 @@ def test_sheet_existing_occurrence_is_not_appended_or_scored(tmp_path):
     )
     ledger.mark(repeated, "onebss_saved")
 
-    assert ledger.pending_sheet_rows() == []
+    pending = ledger.pending_sheet_rows()
+    assert len(pending) == 1
+    assert pending[0]["reassignment"] == "Giao lại"
     assert ledger.scores() == {}
 
 

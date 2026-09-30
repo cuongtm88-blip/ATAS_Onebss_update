@@ -66,6 +66,9 @@ nhân sự; nhóm mới ưu tiên người có tải điểm chuẩn hóa thấp
 Phiên bản 0.9.27 đọc cột `Gửi API` trong file Excel: chỉ dịch vụ đánh dấu `Có`
 (hoặc `x`) được gửi sang API; các quy tắc phân phiếu và ghi Google Sheet không đổi.
 
+Phiên bản 0.9.28 ghi thêm dòng cho phiếu đã có trên Google Sheet, giữ người nhận
+cũ và đánh dấu `Giao lại` ở cột K để công thức thống kê loại khỏi số phiếu/điểm.
+
 ## Nguyên tắc phân bổ
 
 - Mỗi phiếu chọn người có mức tải điểm tháng đã chuẩn hóa thấp nhất trong đúng
@@ -273,7 +276,7 @@ Công cụ dùng chính phiên Google đã đăng nhập trong Chromium và thao
 Google Sheets; không cần Google Sheets API. Tab được chọn theo thời điểm giao, ví dụ
 `Tháng 8/2026` hoặc `Tháng 9/2026`, theo mẫu `sheet_name_template`. Tab tương ứng cần
 tồn tại sẵn trong file Google Sheet. Công cụ tìm dòng cuối và nối dữ liệu từ cột A
-đến J theo thứ tự:
+đến K theo thứ tự:
 
 1. Ngày giao
 2. Mã giao dịch
@@ -285,8 +288,10 @@ tồn tại sẵn trong file Google Sheet. Công cụ tìm dòng cuối và nố
 8. Địa chỉ lắp đặt
 9. Tỉnh lắp đặt
 10. Tên dự án (để trống nếu không phải phiếu dự án)
+11. Ghi `Giao lại` nếu Mã giao dịch + Mã thuê bao đã có trong Google Sheet; phiếu
+    mới để trống
 
-Các cột từ B đến J được khai báo bằng `columns` trong `config.toml`; cột A là thời
+Các cột từ B đến K được khai báo bằng `columns` trong `config.toml`; cột A là thời
 điểm giao do chương trình tự thêm. Có thể thêm `"points"` vào cuối danh sách nếu
 cần ghi cả điểm của từng người.
 
@@ -295,9 +300,11 @@ thiếu, chương trình đọc trường `Tên TB` trong phần chi tiết củ
 Tỉnh LĐ trống nhưng Địa chỉ LĐ có ghi rõ tỉnh/thành phố, chương trình dùng địa danh
 đó; không thay thế bằng Tỉnh quản lý HĐ.
 
-Trong `preview_assignments.csv`, cột `Trạng thái Google Sheet` cho biết đây là phiếu
-mới sẽ được ghi hay phiếu đã có và không ghi thêm dòng. Terminal cũng báo rõ số
-phiếu giao lại không ghi thêm dòng. Các quy tắc Excel chứa cụm `không đưa vào danh
+Phiếu đã có trong bất kỳ tab tháng nào vẫn được giao cho người nhận đã lưu và được
+ghi thành dòng mới trong tab tháng hiện tại với cột K là `Giao lại`. Các dòng này
+không được tính điểm trong SQLite và cần được loại khỏi công thức tổng hợp Google
+Sheet. Trong `preview_assignments.csv`, cột `Trạng thái Google Sheet` cho biết phiếu
+mới hay phiếu giao lại. Các quy tắc Excel chứa cụm `không đưa vào danh
 sách` được chặn ở cả bước lập kế hoạch, hàng đợi SQLite và bước ghi Sheet.
 
 ## Kết nối phân hệ Giao phiếu trên Dashboard

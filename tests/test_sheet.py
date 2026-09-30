@@ -133,3 +133,25 @@ def test_google_sheet_append_maps_extended_onebss_fields():
         ["14/09/2026 10:30"],
         "Tháng 9/2026",
     )
+
+
+def test_google_sheet_append_marks_existing_ticket_in_column_k():
+    config = SimpleNamespace(
+        sheet_columns=(
+            "transaction_id", "subscriber_id", "service", "assignee",
+            "subscriber_name", "contract_type", "labor_address",
+            "labor_province", "project_name", "reassignment",
+        ),
+        sheet_name_template="Tháng {month}/{year}",
+        timezone="Asia/Ho_Chi_Minh",
+    )
+    client = GoogleSheetClient(SimpleNamespace(config=config))
+    client.append_rows = AsyncMock()
+    assignment = Assignment(
+        Ticket("GD1", "TB1", "Fiber"), ("An",), Decimal("17"), 3,
+        sheet_existing=True, sheet_timestamp="30/09/2026 14:00",
+    )
+
+    asyncio.run(client.append([assignment]))
+
+    assert client.append_rows.await_args.args[0][0][-1] == "Giao lại"

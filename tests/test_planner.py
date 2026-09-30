@@ -255,7 +255,7 @@ def test_google_sheet_assignee_is_canonicalized_from_excel_member_name():
     assert result[0].sheet_existing is True
 
 
-def test_previous_month_sheet_assignee_is_kept_and_written_again():
+def test_previous_month_sheet_assignee_is_kept_and_marked_as_reassignment():
     rule = ServiceRule(
         3, "Fiber", Decimal("17"), "",
         (Member("An", "Nhóm 1", "Chính"),),
@@ -267,7 +267,7 @@ def test_previous_month_sheet_assignee_is_kept_and_written_again():
     )
 
     assert result[0].assignees == ("An",)
-    assert result[0].sheet_existing is False
+    assert result[0].sheet_existing is True
 
 
 def test_google_sheet_repeat_does_not_change_balance_score():

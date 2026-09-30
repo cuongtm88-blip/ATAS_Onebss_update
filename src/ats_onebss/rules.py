@@ -213,6 +213,7 @@ def load_rules(path: str | Path) -> list[ServiceRule]:
     sheet_service_column = header_columns.get("dich vu tren google sheet")
     points_column = header_columns.get("diem quy doi")
     condition_column = header_columns.get("quy tac")
+    api_column = header_columns.get("gui api")
     if not service_column or not points_column or not condition_column:
         raise RuleError(
             "File quy tắc phải có các cột Dịch vụ, Điểm quy đổi và Quy tắc ở dòng 2"
@@ -223,6 +224,8 @@ def load_rules(path: str | Path) -> list[ServiceRule]:
     group_by_column: dict[int, str] = {}
     current_group = ""
     for col in range(member_start_column, sheet.max_column + 1):
+        if col == api_column:
+            continue
         label = str(sheet.cell(1, col).value or "").strip()
         if label:
             current_group = label
@@ -244,22 +247,32 @@ def load_rules(path: str | Path) -> list[ServiceRule]:
         policy = unaccent(condition)
         count_points = "khong tinh diem" not in policy
         write_to_sheet = "khong dua vao danh sach" not in policy
+        api_value = (
+            unaccent(str(sheet.cell(row, api_column).value or "").strip())
+            if api_column else ""
+        )
+        send_to_api = (
+            True if api_column is None
+            else api_value in {"co", "yes", "true", "1", "x", "gui", "gui api"}
+        )
         members: list[Member] = []
         for col in range(member_start_column, sheet.max_column + 1):
+            if col == api_column:
+                continue
             role = str(sheet.cell(row, col).value or "").strip()
             if role:
                 members.append(Member(headers[col - 1], group_by_column[col], role))
         signature = (
             normalize(service), normalize(sheet_service), points, normalize(condition),
             tuple((normalize(m.name), normalize(m.group), normalize(m.role)) for m in members),
-            count_points, write_to_sheet,
+            count_points, write_to_sheet, send_to_api,
         )
         if signature in signatures:
             continue
         signatures.add(signature)
         rules.append(ServiceRule(
             row, service, points, condition, tuple(members), sheet_service,
-            count_points, write_to_sheet,
+            count_points, write_to_sheet, send_to_api,
         ))
     return rules
 

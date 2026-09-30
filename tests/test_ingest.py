@@ -75,6 +75,23 @@ def test_ingest_outbox_only_contains_confirmed_new_assignments(tmp_path):
     assert ledger.pending_ingest_rows() == []
 
 
+def test_ingest_outbox_respects_service_api_opt_in(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.db")
+    opted_out = ledger.stage(Assignment(
+        Ticket("GD0", "TB0", "Fiber"), ("An",), 17, 3, send_to_api=False,
+    ))
+    opted_in = ledger.stage(Assignment(
+        Ticket("GD1", "TB1", "Fiber"), ("Bình",), 17, 3, send_to_api=True,
+    ))
+    ledger.mark(opted_out, "onebss_saved")
+    ledger.mark(opted_in, "onebss_saved")
+
+    pending = ledger.pending_ingest_rows()
+
+    assert [row["transaction_id"] for row in pending] == ["GD1"]
+    assert pending[0]["rule_row"] == 3
+
+
 def test_existing_ledger_rows_are_not_backfilled_into_api_outbox(tmp_path):
     path = tmp_path / "legacy.db"
     ledger = Ledger(path)

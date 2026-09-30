@@ -21,6 +21,7 @@ class ServiceRule:
     sheet_service: str = ""
     count_points: bool = True
     write_to_sheet: bool = True
+    send_to_api: bool = True
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,7 @@ class Assignment:
     sheet_existing: bool = False
     write_to_sheet: bool = True
     cohort_key: str = ""
+    send_to_api: bool = True
 
     @property
     def points_per_person(self) -> Decimal:

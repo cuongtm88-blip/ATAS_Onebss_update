@@ -113,7 +113,9 @@ def plan_assignments(
             # The authoritative Sheet is enough to route a returned ticket,
             # even if its historical service wording is no longer in Excel.
             service = ticket.service_type or ticket.service
-            rule = ServiceRule(0, service, Decimal(0), "", (), service)
+            rule = ServiceRule(
+                0, service, Decimal(0), "", (), service, send_to_api=False
+            )
         # A service explicitly excluded from Google Sheet must not inherit an
         # old, erroneously recorded Sheet assignee. It is always routed from
         # the current Excel rule and remains absent from Sheet history.
@@ -254,6 +256,7 @@ def plan_assignments(
             sheet_existing=sheet_existing,
             write_to_sheet=rule.write_to_sheet,
             cohort_key=cohort_key,
+            send_to_api=rule.send_to_api,
         )
         if not sheet_existing:
             share = assignment.points_per_person

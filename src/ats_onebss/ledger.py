@@ -251,7 +251,7 @@ class Ledger:
                         sheet_ordinal,
                         int(assignment.sheet_existing),
                         int(assignment.sheet_existing or not assignment.write_to_sheet),
-                        0,
+                        int(not assignment.send_to_api),
                         assignment.ticket.subscriber_name,
                         assignment.ticket.contract_type,
                         assignment.ticket.labor_address,
@@ -307,7 +307,8 @@ class Ledger:
             rows = db.execute(
                 """
                 SELECT ticket_key, transaction_id, subscriber_id, service,
-                       assignee, sheet_timestamp, labor_province, project_name
+                       assignee, sheet_timestamp, labor_province, project_name,
+                       rule_row
                 FROM assignments
                 WHERE onebss_saved = 1 AND api_saved = 0
                 ORDER BY created_at, ticket_key, assignee
@@ -316,6 +317,7 @@ class Ledger:
         keys = (
             "ticket_key", "transaction_id", "subscriber_id", "service",
             "assignee", "sheet_timestamp", "labor_province", "project_name",
+            "rule_row",
         )
         return [dict(zip(keys, row, strict=True)) for row in rows]
 

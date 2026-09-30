@@ -52,11 +52,19 @@ hay nhật ký. Sau khi OneBSS xác nhận giao, ứng dụng gửi các field `
 (`Chưa xử lý`), cùng `Tỉnh` và `Tên dự án` nếu có. Gửi API và ghi Google Sheet
 độc lập; lỗi API được giữ trong hàng đợi cục bộ để thử lại ở lần đồng bộ tiếp theo.
 
+Nếu file Excel có cột `Gửi API`, chỉ các dòng dịch vụ có giá trị `Có` (hoặc dấu
+`x`) mới được đưa vào hàng đợi gửi API; ô trống/`Không` sẽ không gửi. Nếu workbook
+chưa có cột này, ATS giữ hành vi cũ và gửi API cho các dịch vụ như trước. Cột
+`Gửi API` không được xem là cột nhân sự và không ảnh hưởng đến quy tắc cân bằng.
+
 Phiên bản 0.9.25 bổ sung đồng bộ phiếu đã giao sang API nhận phiếu, giữ hàng đợi
 thử lại độc lập với Google Sheets và lưu API Token trong kho bảo mật hệ điều hành.
 
 Phiên bản 0.9.26 gom các phiếu thường cùng Tên KH, Địa chỉ LĐ và dịch vụ về một
 nhân sự; nhóm mới ưu tiên người có tải điểm chuẩn hóa thấp nhất.
+
+Phiên bản 0.9.27 đọc cột `Gửi API` trong file Excel: chỉ dịch vụ đánh dấu `Có`
+(hoặc `x`) được gửi sang API; các quy tắc phân phiếu và ghi Google Sheet không đổi.
 
 ## Nguyên tắc phân bổ
 

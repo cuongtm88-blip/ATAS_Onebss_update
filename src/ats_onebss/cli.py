@@ -371,7 +371,18 @@ async def sync_pending(
     dashboard: DashboardClient,
 ) -> None:
     ingest = IngestApiClient.from_environment()
-    ingest_pending = ledger.pending_ingest_rows()
+    pending_api_rows = ledger.pending_ingest_rows()
+    api_rule_rows = {rule.row_number for rule in load_rules(config.rules_file)
+                     if rule.send_to_api}
+    ingest_pending = [
+        row for row in pending_api_rows if row["rule_row"] in api_rule_rows
+    ]
+    disabled_api_count = len(pending_api_rows) - len(ingest_pending)
+    if disabled_api_count:
+        print(
+            f"Bỏ qua {disabled_api_count} phiếu chờ API vì cột Gửi API trong Excel "
+            "đang để trống/Không."
+        )
     if ingest.enabled and ingest_pending:
         try:
             result = await ingest.push_pending(ingest_pending)

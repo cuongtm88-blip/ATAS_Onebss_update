@@ -52,6 +52,30 @@ def test_loads_separate_google_sheet_service_and_shifted_members(tmp_path):
     assert rule.members[0].name == "An"
 
 
+def test_api_column_is_opt_in_and_not_treated_as_a_member(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append([None, None, None, None, "Nhóm 1", None])
+    sheet.append(["STT", "Dịch vụ", "Điểm quy đổi", "Quy tắc", "An", "Gửi API"])
+    sheet.append([1, "Fiber", 17, "", "Chính", "Có"])
+    sheet.append([2, "MetroNet LT", 27, "", "Chính", None])
+    path = tmp_path / "rules-api.xlsx"
+    workbook.save(path)
+
+    rules = load_rules(path)
+
+    assert rules[0].send_to_api is True
+    assert [member.name for member in rules[0].members] == ["An"]
+    assert rules[1].send_to_api is False
+    assert [member.name for member in rules[1].members] == ["An"]
+
+
+def test_workbook_without_api_column_preserves_legacy_api_behavior(tmp_path):
+    rules = load_rules(make_rules(tmp_path))
+
+    assert all(rule.send_to_api for rule in rules)
+
+
 def test_current_workbook_contains_leasedline_ge():
     workbook = Path(__file__).parents[1] / "Giao phiếu.xlsx"
     rule = next(item for item in load_rules(workbook) if item.service == "Leasedline GE")

@@ -85,7 +85,7 @@ def plan_assignments(
         if is_giam_sat:
             continue
         key = assignment_cohort_key(
-            ticket.customer_name, ticket.labor_province,
+            ticket.customer_name, ticket.labor_address,
             ticket.service_type or ticket.service,
         )
         prior = preferred_assignees.get(
@@ -177,7 +177,7 @@ def plan_assignments(
         eligible_count = sum(len(members) for members in groups.values())
         cohort_key = (
             "" if voice_mode == "giam_sat" else assignment_cohort_key(
-                ticket.customer_name, ticket.labor_province,
+                ticket.customer_name, ticket.labor_address,
                 ticket.service_type or ticket.service,
             )
         )

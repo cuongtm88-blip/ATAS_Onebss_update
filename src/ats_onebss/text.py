@@ -25,12 +25,12 @@ def ticket_identity(transaction_id: object, subscriber_id: object) -> str:
 
 
 def assignment_cohort_key(
-    customer_name: object, labor_province: object, service: object,
+    customer_name: object, labor_address: object, service: object,
 ) -> str:
     """Return a stable key for tickets that must stay with one employee."""
     customer = normalize(customer_name)
-    province = normalize(labor_province)
+    address = normalize(labor_address)
     service_name = normalize(service)
-    if not customer or not province or not service_name:
+    if not customer or not address or not service_name:
         return ""
-    return "\x1f".join((customer, province, service_name))
+    return "\x1f".join((customer, address, service_name))

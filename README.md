@@ -55,6 +55,9 @@ hay nhật ký. Sau khi OneBSS xác nhận giao, ứng dụng gửi các field `
 Phiên bản 0.9.25 bổ sung đồng bộ phiếu đã giao sang API nhận phiếu, giữ hàng đợi
 thử lại độc lập với Google Sheets và lưu API Token trong kho bảo mật hệ điều hành.
 
+Phiên bản 0.9.26 gom các phiếu thường cùng Tên KH, Địa chỉ LĐ và dịch vụ về một
+nhân sự; nhóm mới ưu tiên người có tải điểm chuẩn hóa thấp nhất.
+
 ## Nguyên tắc phân bổ
 
 - Mỗi phiếu chọn người có mức tải điểm tháng đã chuẩn hóa thấp nhất trong đúng
@@ -72,6 +75,10 @@ thử lại độc lập với Google Sheets và lưu API Token trong kho bảo 
   1.05; tất cả nhân sự còn lại mặc định 1.00. Vì điểm trung bình nhóm là hệ số
   chung khi so sánh, việc chọn theo `điểm / hệ số` tương đương chọn người có tỷ
   lệ thực hiện thấp nhất so với mức được phép của họ.
+- Các phiếu thường cùng `Tên KH` + `Địa chỉ LĐ` + dịch vụ được gom về một nhân
+  sự đủ điều kiện; khi gặp nhóm lần đầu, chọn người có tải điểm chuẩn hóa thấp
+  nhất. Thiếu một trong ba trường thì không ghim theo nhóm địa chỉ và phiếu vẫn
+  được cân bằng theo quy tắc dịch vụ.
 - Phiếu có điểm lớn hoặc ít người đủ điều kiện vẫn được lập kế hoạch trước để giữ
   cân bằng chặt hơn. Các tuyến dự án và Voice Brandname cố định vẫn được áp dụng
   trước cân bằng, nên đôi lúc một cá nhân có thể vượt mức mong muốn.

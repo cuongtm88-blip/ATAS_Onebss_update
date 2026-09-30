@@ -307,7 +307,7 @@ async def collect_plan(
         if pinned:
             skipped.append((
                 ticket,
-                f"Phiếu cùng Tên KH, Tỉnh LĐ và dịch vụ đang được giao cho "
+                f"Phiếu cùng Tên KH, Địa chỉ LĐ và dịch vụ đang được giao cho "
                 f"{pinned}, nhưng nhân sự này không thuộc nhóm đủ điều kiện "
                 "của quy tắc phiếu hiện tại.",
             ))

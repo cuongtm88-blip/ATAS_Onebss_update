@@ -93,29 +93,29 @@ class Ledger:
                 db.execute(
                     "ALTER TABLE assignments ADD COLUMN cohort_key TEXT NOT NULL DEFAULT ''"
                 )
-                # Preserve existing affinity where it is unambiguous. Before
-                # cohort keys were stored explicitly, Voice Brandname rows
-                # assigned to Lê Đức Tuấn were the fixed Giam sat route and
-                # must not seed Xu ly cohorts.
-                legacy_rows = db.execute(
-                    """
-                    SELECT rowid, customer_name, labor_province, service, assignee
-                    FROM assignments
-                    WHERE customer_name <> '' AND labor_province <> '' AND service <> ''
-                    """
-                ).fetchall()
-                for rowid, customer, province, service, assignee in legacy_rows:
-                    if (
-                        normalize(service) == normalize("Voice Brandname")
-                        and normalize(assignee) == normalize("Lê Đức Tuấn")
-                    ):
-                        continue
-                    cohort_key = assignment_cohort_key(customer, province, service)
-                    if cohort_key:
-                        db.execute(
-                            "UPDATE assignments SET cohort_key = ? WHERE rowid = ?",
-                            (cohort_key, rowid),
-                        )
+            # Rebuild affinity keys from the current grouping dimensions. This
+            # migrates older province-based keys without changing assignment
+            # history; rows lacking an address cannot anchor an address cohort.
+            history = db.execute(
+                """
+                SELECT rowid, customer_name, labor_address, service, assignee,
+                       cohort_key
+                FROM assignments
+                """
+            ).fetchall()
+            for rowid, customer, address, service, assignee, old_key in history:
+                if (
+                    normalize(service) == normalize("Voice Brandname")
+                    and normalize(assignee) == normalize("Lê Đức Tuấn")
+                ):
+                    cohort_key = ""
+                else:
+                    cohort_key = assignment_cohort_key(customer, address, service)
+                if cohort_key != old_key:
+                    db.execute(
+                        "UPDATE assignments SET cohort_key = ? WHERE rowid = ?",
+                        (cohort_key, rowid),
+                    )
             # Older databases did not distinguish identical Sheet rows created
             # in the same minute. Rebuild stable ordinals so pending retries can
             # verify every occurrence instead of treating them as one row.

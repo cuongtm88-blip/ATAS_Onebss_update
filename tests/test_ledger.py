@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from ats_onebss.ledger import Ledger
 from ats_onebss.models import Assignment, Ticket
+from ats_onebss.text import assignment_cohort_key
 
 
 def test_reappearing_ticket_creates_a_new_occurrence(tmp_path):
@@ -107,6 +108,29 @@ def test_stores_named_project(tmp_path):
             "SELECT project_name FROM assignments WHERE ticket_key = 'GD1|TB1'"
         ).fetchone()[0]
     assert value == "Dự án BCA"
+
+
+def test_migrates_old_cohort_keys_to_address_grouping(tmp_path):
+    path = tmp_path / "ledger.db"
+    Ledger(path)
+    with Ledger(path).connect() as db:
+        db.execute(
+            """INSERT INTO assignments
+               (ticket_key,transaction_id,subscriber_id,service,assignee,points,
+                rule_row,onebss_saved,created_at,customer_name,labor_province,
+                labor_address,cohort_key)
+               VALUES ('GD1|TB1','GD1','TB1','Fiber','An','17',3,1,'2026-09-01',
+                       'Khách hàng A','Hà Nội','Số 10 Lê Lợi',
+                       'old province cohort')"""
+        )
+
+    Ledger(path)
+
+    with Ledger(path).connect() as db:
+        actual = db.execute(
+            "SELECT cohort_key FROM assignments WHERE ticket_key = 'GD1|TB1'"
+        ).fetchone()[0]
+    assert actual == assignment_cohort_key("Khách hàng A", "Số 10 Lê Lợi", "Fiber")
 
 
 def test_pending_sheet_row_keeps_extended_onebss_fields(tmp_path):

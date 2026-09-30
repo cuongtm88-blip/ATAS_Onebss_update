@@ -100,10 +100,11 @@ def test_excluded_cohort_owner_falls_back_for_non_project_ticket():
     )
     ticket = Ticket(
         "GD1", "TB1", "Internet trực tiếp",
-        customer_name="Khách hàng A", labor_province="Thái Nguyên",
+        customer_name="Khách hàng A", labor_address="1 Lê Lợi",
+        labor_province="Thái Nguyên",
     )
     cohort = assignment_cohort_key(
-        ticket.customer_name, ticket.labor_province, ticket.service
+        ticket.customer_name, ticket.labor_address, ticket.service
     )
     conflicts = {}
     result = plan_assignments(
@@ -113,6 +114,54 @@ def test_excluded_cohort_owner_falls_back_for_non_project_ticket():
 
     assert result[0].assignees == ("Bình",)
     assert conflicts == {}
+
+
+def test_same_customer_address_and_service_share_lowest_load_owner():
+    rule = ServiceRule(
+        3, "Internet trực tiếp", Decimal("27"), "",
+        (Member("An", "Nhóm 1", "Chính"), Member("Bình", "Nhóm 1", "Chính")),
+    )
+    tickets = [
+        Ticket(
+            "GD1", "TB1", "Internet trực tiếp", customer_name="Khách hàng A",
+            labor_address="Số 10, Lê Lợi", labor_province="Hà Nội",
+        ),
+        Ticket(
+            "GD2", "TB2", "Internet trực tiếp", customer_name="Khách hàng A",
+            labor_address="  SỐ 10,  LÊ LỢI ", labor_province="Hưng Yên",
+        ),
+    ]
+
+    result = plan_assignments(
+        tickets, [rule], {"An": Decimal("50"), "Bình": Decimal("0")}
+    )
+
+    assert [item.assignees for item in result] == [("Bình",), ("Bình",)]
+
+
+def test_different_addresses_do_not_share_a_cohort_pin():
+    rule = ServiceRule(
+        3, "Internet trực tiếp", Decimal("27"), "",
+        (Member("An", "Nhóm 1", "Chính"), Member("Bình", "Nhóm 1", "Chính")),
+    )
+    first = Ticket(
+        "GD1", "TB1", "Internet trực tiếp", customer_name="Khách hàng A",
+        labor_address="Số 10, Lê Lợi",
+    )
+    second = Ticket(
+        "GD2", "TB2", "Internet trực tiếp", customer_name="Khách hàng A",
+        labor_address="Số 20, Lê Lợi",
+    )
+    first_cohort = assignment_cohort_key(
+        first.customer_name, first.labor_address, first.service
+    )
+
+    result = plan_assignments(
+        [first, second], [rule], {"An": Decimal("100"), "Bình": Decimal("0")},
+        cohort_assignees={first_cohort: "An"},
+    )
+
+    assert [item.assignees for item in result] == [("An",), ("Bình",)]
 
 
 def test_excluded_project_owner_leaves_ticket_unassigned():

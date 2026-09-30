@@ -52,11 +52,22 @@ def load_config(path: str | Path) -> Config:
     runtime = data["runtime"]
     dashboard = data.get("dashboard", {})
     balance = data.get("balance", {})
-    sheet_columns = tuple(sheet.get("columns", [
+    configured_sheet_columns = list(sheet.get("columns", [
         "transaction_id", "subscriber_id", "service", "assignee",
         "subscriber_name", "contract_type", "labor_address",
-        "labor_province", "project_name",
+        "labor_province", "project_name", "reassignment",
     ]))
+    # Older Application Support configs are user-owned and are not overwritten
+    # by app updates. Add the K-column field at load time without resetting the
+    # user's other settings.
+    if "reassignment" not in configured_sheet_columns:
+        insert_at = (
+            configured_sheet_columns.index("project_name") + 1
+            if "project_name" in configured_sheet_columns
+            else len(configured_sheet_columns)
+        )
+        configured_sheet_columns.insert(insert_at, "reassignment")
+    sheet_columns = tuple(configured_sheet_columns)
     required_sheet_columns = (
         "transaction_id", "subscriber_id", "service", "assignee",
     )

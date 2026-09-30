@@ -157,6 +157,8 @@ def write_preview(path: Path, assignments: list[Assignment]) -> None:
                     "Theo quy tắc - không ghi Google Sheet"
                     if not item.write_to_sheet
                     else "Đã có - ghi dòng mới, đánh dấu Giao lại"
+                    if item.sheet_reassignment
+                    else "Đã có - ghi dòng mới, không đánh dấu Giao lại"
                     if item.sheet_existing
                     else "Phiếu mới - sẽ ghi"
                 ),
@@ -492,11 +494,15 @@ async def process_available(
         }
         batch = [ledger.stage(assignment) for assignment in batch]
         repeated = sum(item.sheet_existing for item in batch)
+        marked_repeated = sum(
+            item.sheet_reassignment for item in batch if item.sheet_existing
+        )
         omitted = sum(not item.write_to_sheet for item in batch)
         notices = []
         if repeated:
             notices.append(
-                f"{repeated} phiếu đã có trên Google Sheet, ghi dòng mới với cột K = Giao lại"
+                f"{repeated} phiếu đã có trên Google Sheet, ghi dòng mới "
+                f"({marked_repeated} dòng đánh dấu Giao lại ở cột K)"
             )
         if omitted:
             notices.append(f"{omitted} phiếu theo quy tắc không ghi Google Sheet")

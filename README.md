@@ -68,6 +68,14 @@ Phiên bản 0.9.27 đọc cột `Gửi API` trong file Excel: chỉ dịch vụ
 
 Phiên bản 0.9.28 ghi thêm dòng cho phiếu đã có trên Google Sheet, giữ người nhận
 cũ và đánh dấu `Giao lại` ở cột K để công thức thống kê loại khỏi số phiếu/điểm.
+Riêng Voice Brandname, cột K chỉ được đánh dấu khi VIP hiện tại khớp VIP suy ra
+từ người nhận cũ trên Sheet (Lê Đức Tuấn = `Giam sat`, người khác = `Xu ly`).
+Phiếu VIP `Giam sat` luôn giao Lê Đức Tuấn; VIP `Xu ly` giữ người nhận cũ.
+
+Phiên bản 0.9.29 tự bổ sung cấu hình cột K cho các cấu hình runtime cũ, bỏ chuỗi
+nội bộ `Giao lại theo Google Sheet` khỏi dữ liệu dự án/ghi chú, và chỉ đánh dấu
+các phiếu Voice Brandname giao lại khi VIP hiện tại khớp trạng thái suy ra từ người
+nhận cũ.
 
 ## Nguyên tắc phân bổ
 
@@ -131,7 +139,9 @@ cũ và đánh dấu `Giao lại` ở cột K để công thức thống kê lo�
   `Giam sat` luôn giao Lê Đức Tuấn, kể cả phiếu giao lại đang ghi người khác trên
   Google Sheet. `Xu ly` giao cân bằng giữa Đỗ Thị Thu Trang, Ngô Thùy Trang và
   Nguyễn Thị Thu Trang; nếu là phiếu giao lại thì giữ người nhận ban đầu trên
-  Google Sheet. Giá trị VIP trống/không nhận diện được sẽ bị bỏ qua an toàn.
+  Google Sheet. Với phiếu giao lại, người nhận cũ Lê Đức Tuấn được xem là `Giam sat`,
+  người khác là `Xu ly`; cột K chỉ ghi `Giao lại` nếu trạng thái hiện tại giống
+  trạng thái suy ra từ người nhận cũ. VIP trống/không nhận diện được sẽ bị bỏ qua.
 - Tên miền áp dụng điểm theo `Loại HĐ`; MegaWan/MetroNet áp dụng theo `Loại kênh`.
 - `Thoại quốc tế` vẫn được giao cho Trần Mạnh Cường theo file Excel, nhưng có
   điểm bằng 0 và không được ghi vào Google Sheet. Dòng lịch sử trên Sheet không
@@ -288,8 +298,8 @@ tồn tại sẵn trong file Google Sheet. Công cụ tìm dòng cuối và nố
 8. Địa chỉ lắp đặt
 9. Tỉnh lắp đặt
 10. Tên dự án (để trống nếu không phải phiếu dự án)
-11. Ghi `Giao lại` nếu Mã giao dịch + Mã thuê bao đã có trong Google Sheet; phiếu
-    mới để trống
+11. Ghi `Giao lại` nếu phiếu đã có trên Google Sheet và thuộc lượt giao lại được
+    đánh dấu; trường hợp Voice Brandname còn phụ thuộc VIP hiện tại so với người cũ.
 
 Các cột từ B đến K được khai báo bằng `columns` trong `config.toml`; cột A là thời
 điểm giao do chương trình tự thêm. Có thể thêm `"points"` vào cuối danh sách nếu
@@ -300,11 +310,13 @@ thiếu, chương trình đọc trường `Tên TB` trong phần chi tiết củ
 Tỉnh LĐ trống nhưng Địa chỉ LĐ có ghi rõ tỉnh/thành phố, chương trình dùng địa danh
 đó; không thay thế bằng Tỉnh quản lý HĐ.
 
-Phiếu đã có trong bất kỳ tab tháng nào vẫn được giao cho người nhận đã lưu và được
-ghi thành dòng mới trong tab tháng hiện tại với cột K là `Giao lại`. Các dòng này
-không được tính điểm trong SQLite và cần được loại khỏi công thức tổng hợp Google
-Sheet. Trong `preview_assignments.csv`, cột `Trạng thái Google Sheet` cho biết phiếu
-mới hay phiếu giao lại. Các quy tắc Excel chứa cụm `không đưa vào danh
+Phiếu đã có trong bất kỳ tab tháng nào vẫn được giao và ghi thành dòng mới trong tab
+tháng hiện tại. Phiếu giao lại thông thường giữ người nhận cũ và đánh dấu `Giao lại`
+ở cột K. Với Voice Brandname, VIP `Xu ly` giữ người cũ; VIP `Giam sat` giao Lê Đức
+Tuấn. Chỉ đánh dấu K khi VIP hiện tại trùng trạng thái suy ra từ người nhận cũ; dù
+không đánh dấu K, phiếu vẫn được xem là đã có và không làm tăng điểm. Trong
+`preview_assignments.csv`, cột `Trạng thái Google Sheet` nêu rõ có đánh dấu hay không.
+Các quy tắc Excel chứa cụm `không đưa vào danh
 sách` được chặn ở cả bước lập kế hoạch, hàng đợi SQLite và bước ghi Sheet.
 
 ## Kết nối phân hệ Giao phiếu trên Dashboard

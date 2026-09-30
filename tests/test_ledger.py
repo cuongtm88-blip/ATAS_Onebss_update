@@ -51,6 +51,24 @@ def test_sheet_existing_occurrence_is_appended_as_reassignment_but_not_scored(tm
     assert ledger.scores() == {}
 
 
+def test_voice_replay_without_matching_old_vip_mode_is_not_marked(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.db")
+    replay = ledger.stage(
+        Assignment(
+            Ticket("GD1", "TB1", "Voice Brandname"),
+            ("Lê Đức Tuấn",),
+            Decimal("20"),
+            15,
+            sheet_existing=True,
+            sheet_reassignment=False,
+        )
+    )
+    ledger.mark(replay, "onebss_saved")
+
+    assert ledger.pending_sheet_rows()[0]["reassignment"] == ""
+    assert ledger.scores() == {}
+
+
 def test_no_sheet_assignment_is_completed_without_sheet_outbox_or_score(tmp_path):
     ledger = Ledger(tmp_path / "ledger.db")
     assignment = ledger.stage(

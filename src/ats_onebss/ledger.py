@@ -89,6 +89,11 @@ class Ledger:
                 db.execute(
                     "ALTER TABLE assignments ADD COLUMN sheet_existing INTEGER NOT NULL DEFAULT 0"
                 )
+            if "sheet_reassignment" not in columns:
+                # Keep already-staged rows with the pre-existing replay behavior.
+                db.execute(
+                    "ALTER TABLE assignments ADD COLUMN sheet_reassignment INTEGER NOT NULL DEFAULT 1"
+                )
             if "cohort_key" not in columns:
                 db.execute(
                     "ALTER TABLE assignments ADD COLUMN cohort_key TEXT NOT NULL DEFAULT ''"
@@ -232,9 +237,9 @@ class Ledger:
                     (ticket_key, transaction_id, subscriber_id, service, assignee, points,
                      rule_row, created_at, sheet_timestamp, project_name, original_assignee,
                      sheet_ordinal, sheet_existing, sheet_saved, api_saved, subscriber_name,
-                     contract_type, labor_address, labor_province, customer_name,
+                     sheet_reassignment, contract_type, labor_address, labor_province, customer_name,
                      cohort_key)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         ledger_key,
@@ -253,6 +258,11 @@ class Ledger:
                         int(not assignment.write_to_sheet),
                         int(not assignment.send_to_api),
                         assignment.ticket.subscriber_name,
+                        int(
+                            assignment.sheet_existing
+                            if assignment.sheet_reassignment is None
+                            else assignment.sheet_reassignment
+                        ),
                         assignment.ticket.contract_type,
                         assignment.ticket.labor_address,
                         assignment.ticket.labor_province,
@@ -280,7 +290,7 @@ class Ledger:
                 SELECT ticket_key, transaction_id, subscriber_id, service, assignee, points,
                        sheet_timestamp, sheet_ordinal, subscriber_name, contract_type,
                        labor_address, labor_province, project_name,
-                       CASE WHEN sheet_existing = 1 THEN 'Giao lại' ELSE '' END
+                       CASE WHEN sheet_reassignment = 1 THEN 'Giao lại' ELSE '' END
                            AS reassignment
                 FROM assignments
                 WHERE onebss_saved = 1 AND sheet_saved = 0

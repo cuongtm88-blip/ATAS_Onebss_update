@@ -29,7 +29,7 @@ data_start_row = 9
 columns = [
   "transaction_id", "subscriber_id", "service", "assignee",
   "subscriber_name", "contract_type", "labor_address", "labor_province",
-  "project_name",
+  "project_name", "reassignment",
 ]
 
 [runtime]

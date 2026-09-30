@@ -268,6 +268,7 @@ def test_previous_month_sheet_assignee_is_kept_and_marked_as_reassignment():
 
     assert result[0].assignees == ("An",)
     assert result[0].sheet_existing is True
+    assert result[0].project_name == ""
 
 
 def test_google_sheet_repeat_does_not_change_balance_score():
@@ -406,6 +407,7 @@ def test_returned_voice_giam_sat_overrides_google_sheet_assignee():
     )
     assert result[0].assignees == ("Lê Đức Tuấn",)
     assert result[0].sheet_existing is True
+    assert result[0].sheet_reassignment is False
 
 
 def test_returned_voice_xu_ly_keeps_google_sheet_assignee():
@@ -418,3 +420,26 @@ def test_returned_voice_xu_ly_keeps_google_sheet_assignee():
     )
     assert result[0].assignees == ("Nguyễn Thị Thu Trang",)
     assert result[0].sheet_existing is True
+    assert result[0].sheet_reassignment is True
+
+
+def test_returned_voice_giam_sat_from_le_duc_tuan_marks_reassignment():
+    ticket = Ticket("GD1", "TB1", "Voice Brandname", vip_status="Giam sat")
+    result = plan_assignments(
+        [ticket], [_voice_rule()],
+        preferred_assignees={"gd1|tb1": ("Lê Đức Tuấn",)},
+    )
+    assert result[0].assignees == ("Lê Đức Tuấn",)
+    assert result[0].sheet_existing is True
+    assert result[0].sheet_reassignment is True
+
+
+def test_returned_voice_xu_ly_from_le_duc_tuan_does_not_mark_reassignment():
+    ticket = Ticket("GD1", "TB1", "Voice Brandname", vip_status="Xu ly")
+    result = plan_assignments(
+        [ticket], [_voice_rule()],
+        preferred_assignees={"gd1|tb1": ("Lê Đức Tuấn",)},
+    )
+    assert result[0].assignees == ("Lê Đức Tuấn",)
+    assert result[0].sheet_existing is True
+    assert result[0].sheet_reassignment is False

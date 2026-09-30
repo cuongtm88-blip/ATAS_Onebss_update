@@ -83,6 +83,7 @@ class Assignment:
     ledger_key: str = ""
     sheet_timestamp: str = ""
     sheet_existing: bool = False
+    sheet_reassignment: bool | None = None
     write_to_sheet: bool = True
     cohort_key: str = ""
     send_to_api: bool = True

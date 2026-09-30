@@ -62,7 +62,7 @@ def plan_assignments(
     candidates: list[
         tuple[
             int, Decimal, Ticket, ServiceRule, str, dict[str, list[str]], bool,
-            str,
+            bool, str,
         ]
     ] = []
     cohort_pins = dict(cohort_assignees or {})
@@ -151,9 +151,7 @@ def plan_assignments(
                 project = match_project_rule(project_rules or [], ticket)
             except RuleError:
                 project = None
-            project_name = (
-                project.project_name if project else "Giao lại theo Google Sheet"
-            )
+            project_name = project.project_name if project else ""
             sheet_existing = in_sheet_history
         elif voice_mode == "xu_ly":
             groups = eligible_members(
@@ -180,6 +178,20 @@ def plan_assignments(
                 )
                 project_name = ""
             sheet_existing = in_sheet_history and rule.write_to_sheet
+        sheet_reassignment = sheet_existing
+        if voice_mode in {"xu_ly", "giam_sat"}:
+            # For Voice Brandname, the old mode is inferred from its saved
+            # assignee: Lê Đức Tuấn means Giam sat; anyone else means Xu ly.
+            # The replay marker is only meaningful when the VIP mode matches.
+            if preferred:
+                previous_was_giam_sat = (
+                    normalize(preferred[0]) == normalize("Lê Đức Tuấn")
+                )
+                sheet_reassignment = sheet_existing and (
+                    previous_was_giam_sat == (voice_mode == "giam_sat")
+                )
+            else:
+                sheet_reassignment = False
         eligible_count = sum(len(members) for members in groups.values())
         cohort_key = (
             "" if voice_mode == "giam_sat" else assignment_cohort_key(
@@ -199,6 +211,7 @@ def plan_assignments(
                 project_name,
                 groups,
                 sheet_existing,
+                sheet_reassignment,
                 cohort_key,
             )
         )
@@ -206,7 +219,7 @@ def plan_assignments(
     candidates.sort(key=lambda item: (item[0], item[1]))
     for (
         _count, _negative_points, ticket, rule, project_name, groups,
-        sheet_existing, cohort_key,
+        sheet_existing, sheet_reassignment, cohort_key,
     ) in candidates:
         assignees: list[str] = []
         if cohort_key:
@@ -258,6 +271,7 @@ def plan_assignments(
             rule.points if rule.count_points else Decimal(0), rule.row_number,
             rule.sheet_service or rule.service, project_name,
             sheet_existing=sheet_existing,
+            sheet_reassignment=sheet_reassignment,
             write_to_sheet=rule.write_to_sheet,
             cohort_key=cohort_key,
             send_to_api=rule.send_to_api,

@@ -56,7 +56,10 @@ def test_recover_browser_restarts_context_when_page_reload_fails(monkeypatch):
         onebss.page = page
 
     onebss.open.side_effect = open_onebss
-    sheet = SimpleNamespace(page=object(), open=AsyncMock())
+    async def open_sheet():
+        calls.append("open-sheet")
+
+    sheet = SimpleNamespace(page=object(), open=AsyncMock(side_effect=open_sheet))
     monkeypatch.setattr(cli, "sync_pending", AsyncMock())
     config = SimpleNamespace(timeout_ms=30000)
 
@@ -64,7 +67,7 @@ def test_recover_browser_restarts_context_when_page_reload_fails(monkeypatch):
         config, FakeSession(), onebss, sheet, object(), object()
     ))
 
-    assert calls == ["restart", "open-onebss"]
+    assert calls == ["restart", "open-sheet", "open-onebss"]
     assert sheet.page is None
     sheet.open.assert_awaited_once()
     cli.sync_pending.assert_awaited_once()
@@ -195,6 +198,7 @@ def test_login_command_uses_saved_credentials_and_telegram_otp(monkeypatch, caps
 
     class FakeOneBSS:
         async def open(self):
+            events.append("onebss-open")
             return None
 
         async def session_is_logged_in(self):
@@ -208,7 +212,7 @@ def test_login_command_uses_saved_credentials_and_telegram_otp(monkeypatch, caps
 
     class FakeSheet:
         async def open(self):
-            events.append("sheet-ready")
+            events.append("sheet-open")
             return None
 
     notifier = cli.TelegramNotifier(token="TOKEN", chat_id="123")
@@ -227,5 +231,5 @@ def test_login_command_uses_saved_credentials_and_telegram_otp(monkeypatch, caps
     monkeypatch.setattr("builtins.input", lambda _prompt: "")
     asyncio.run(cli.command_login(SimpleNamespace()))
 
-    assert events == [("user", "pass"), "sheet-ready"]
+    assert events == ["sheet-open", "onebss-open", ("user", "pass")]
     assert "ATS_ONEBSS_LOGIN_READY=1" in capsys.readouterr().out

@@ -77,6 +77,9 @@ nội bộ `Giao lại theo Google Sheet` khỏi dữ liệu dự án/ghi chú, 
 các phiếu Voice Brandname giao lại khi VIP hiện tại khớp trạng thái suy ra từ người
 nhận cũ.
 
+Phiên bản 0.9.30 mở website Google Sheets trước OneBSS khi khởi chạy hoặc phục hồi
+Chromium, để Google Sheets luôn được mở ở tab đầu tiên.
+
 ## Nguyên tắc phân bổ
 
 - Mỗi phiếu chọn người có mức tải điểm tháng đã chuẩn hóa thấp nhất trong đúng
@@ -123,11 +126,14 @@ nhận cũ.
 - `Dự án Vietlott`: nhận diện khi `Tên KH` chứa
   `Công Ty Cổ Phần Đầu Tư Kỹ Thuật Berjaya Gia Thịnh`. Tuyến cố định gồm Vũ
   Thế Ninh (Hưng Yên, Thái Bình, Điện Biên, Hải Phòng, Hải Dương, Lào Cai,
-  Yên Bái); Đào Anh Vũ (Thái Nguyên, Bắc Kạn, Lai Châu, Ninh Bình, Nam Định,
-  Hà Nam, hoặc Tuyên Quang với mã thuê bao `BGT5…`); Đoàn Hải Hà (Sơn La,
-  Cao Bằng, Phú Thọ, Vĩnh Phúc, Hòa Bình); Nguyễn Duy Thành (Bắc Ninh, Bắc
-  Giang, Nghệ An, Quảng Ninh, hoặc Tuyên Quang với mã thuê bao `BGT2…`); và
-  Lê Đức Vinh (Hà Tĩnh, Hà Nội, Lạng Sơn, Thanh Hóa, Hà Giang).
+  Yên Bái, Hà Tĩnh, Hà Giang); Đào Anh Vũ (Thái Nguyên, Bắc Kạn, Lai Châu,
+  Ninh Bình, Nam Định, Hà Nam, Hà Nội, hoặc Tuyên Quang với mã thuê bao
+  `BGT5…`); Đoàn Hải Hà (Sơn La, Cao Bằng, Phú Thọ, Vĩnh Phúc, Hòa Bình,
+  Lạng Sơn); Nguyễn Duy Thành (Bắc Ninh, Bắc Giang, Nghệ An, Quảng Ninh,
+  Thanh Hóa, hoặc Tuyên Quang với mã thuê bao `BGT2…`). Lê Đức Vinh không còn
+  được phân công cho dự án nào.
+- Trong các dự án dùng chung bảng tuyến BCA/BTC/Cục BĐTW, Nghệ An giao Nguyễn
+  Duy Thành và Hà Tĩnh giao Vũ Thế Ninh.
 - Mọi dự án xác định tỉnh/thành từ `Địa chỉ LĐ` trước. Chỉ khi trường này không
   khớp địa bàn đã khai báo, công cụ mới dùng cột `Tỉnh LĐ`. `Địa chỉ KN` không
   tham gia định tuyến dự án.

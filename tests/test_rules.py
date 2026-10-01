@@ -82,7 +82,7 @@ def test_current_workbook_contains_leasedline_ge():
     assert rule.sheet_service == "Kênh Thuê Riêng"
     assert rule.points == Decimal("42")
     assert {member.name for member in rule.members} == {
-        "Vũ Thế Ninh", "Đào Anh Vũ", "Đoàn Hải Hà", "Nguyễn Duy Thành", "Lê Đức Vinh",
+        "Vũ Thế Ninh", "Đào Anh Vũ", "Đoàn Hải Hà", "Nguyễn Duy Thành",
     }
 
 
@@ -322,8 +322,8 @@ def test_hanoi_radio_television_customer_is_assigned_to_nguyen_hoang_duong():
         ("Tỉnh Vĩnh Phúc", "Đoàn Hải Hà"),
         ("Tỉnh Hà Giang", "Nguyễn Duy Thành"),
         ("Tỉnh Thanh Hoá", "Nguyễn Duy Thành"),
-        ("Tỉnh Nghệ An", "Lê Đức Vinh"),
-        ("Tỉnh Hà Tĩnh", "Lê Đức Vinh"),
+        ("Tỉnh Nghệ An", "Nguyễn Duy Thành"),
+        ("Tỉnh Hà Tĩnh", "Vũ Thế Ninh"),
     ],
 )
 def test_bca_routes_by_labor_address(address, assignee):
@@ -334,11 +334,10 @@ def test_bca_routes_by_labor_address(address, assignee):
         priority=90,
         route_field="labor_address",
         routes=(
-            ProjectRoute("Vũ Thế Ninh", ("Hải Phòng", "Điện Biên")),
+            ProjectRoute("Vũ Thế Ninh", ("Hải Phòng", "Điện Biên", "Hà Tĩnh")),
             ProjectRoute("Đào Anh Vũ", ("Hà Nội", "Lai Châu")),
             ProjectRoute("Đoàn Hải Hà", ("Sơn La", "Vĩnh Phúc")),
-            ProjectRoute("Nguyễn Duy Thành", ("Hà Giang", "Thanh Hóa")),
-            ProjectRoute("Lê Đức Vinh", ("Nghệ An", "Hà Tĩnh")),
+            ProjectRoute("Nguyễn Duy Thành", ("Hà Giang", "Thanh Hóa", "Nghệ An")),
         ),
     )
     ticket = Ticket(
@@ -391,7 +390,7 @@ def test_mobifone_no_longer_uses_project_routing():
         ("Địa chỉ LĐ, Thành phố Bắc Ninh", "Đào Anh Vũ"),
         ("Chi nhánh tại tỉnh Yên Bái", "Đoàn Hải Hà"),
         ("Trạm thiết bị tỉnh Lạng Sơn", "Nguyễn Duy Thành"),
-        ("Điểm đặt tại Nghệ An", "Lê Đức Vinh"),
+        ("Điểm đặt tại Nghệ An", "Nguyễn Duy Thành"),
     ],
 )
 def test_bdtw_project_uses_bca_routing(address, assignee):
@@ -415,7 +414,7 @@ def test_bdtw_project_uses_bca_routing(address, assignee):
         ("Địa chỉ LĐ, Thành phố Hà Nội", "Đào Anh Vũ"),
         ("Chi nhánh tại tỉnh Phú Thọ", "Đoàn Hải Hà"),
         ("Trạm thiết bị tỉnh Quảng Ninh", "Nguyễn Duy Thành"),
-        ("Điểm đặt tại Hà Tĩnh", "Lê Đức Vinh"),
+        ("Điểm đặt tại Hà Tĩnh", "Vũ Thế Ninh"),
     ],
 )
 def test_btc_project_uses_bca_routing(address, assignee):
@@ -500,6 +499,43 @@ subscriber_prefixes = ["bgt2"]
     ).assignee == "Nguyễn Duy Thành"
 
 
+@pytest.mark.parametrize(
+    ("address", "assignee"),
+    [
+        ("Điểm lắp đặt tại Hà Nội", "Đào Anh Vũ"),
+        ("Điểm lắp đặt tại Lạng Sơn", "Đoàn Hải Hà"),
+        ("Điểm lắp đặt tại Thanh Hóa", "Nguyễn Duy Thành"),
+        ("Điểm lắp đặt tại Hà Giang", "Vũ Thế Ninh"),
+        ("Điểm lắp đặt tại Hà Tĩnh", "Vũ Thế Ninh"),
+    ],
+)
+def test_vietlott_reassigned_routes(address, assignee):
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    ticket = Ticket(
+        "GD-VIETLOTT", "BGT0001", "Fiber",
+        customer_name="Công Ty Cổ Phần Đầu Tư Kỹ Thuật Berjaya Gia Thịnh",
+        labor_address=address,
+    )
+
+    match = match_project_rule(rules, ticket)
+
+    assert match is not None
+    assert match.project_name == "Dự án Vietlott"
+    assert match.assignee == assignee
+
+
+def test_le_duc_vinh_is_not_assigned_to_any_project():
+    rules = load_project_rules(Path(__file__).parents[1] / "project_rules.toml")
+
+    assert all(
+        route.assignee != "Lê Đức Vinh"
+        for project in rules
+        for route in project.routes
+    )
+    assert all(project.fixed_assignee != "Lê Đức Vinh" for project in rules)
+
+
 def test_project_falls_back_to_labor_province():
     project_file = Path(__file__).parents[1] / "project_rules.toml"
     rules = load_project_rules(project_file)
@@ -570,7 +606,7 @@ def test_tong_cuc_thue_falls_back_to_labor_province():
 
     assert match is not None
     assert match.project_name == "Dự án BTC"
-    assert match.assignee == "Lê Đức Vinh"
+    assert match.assignee == "Nguyễn Duy Thành"
 
 
 def test_project_prefers_labor_address_over_labor_province():

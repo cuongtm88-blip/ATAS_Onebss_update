@@ -37,7 +37,7 @@ route_field = "labor_address"
 assignee = "Vũ Thế Ninh"
 locations = [
   "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
-  "Thái Bình", "Điện Biên",
+  "Thái Bình", "Điện Biên", "Hà Tĩnh",
 ]
 
 [[projects.routes]]
@@ -57,12 +57,8 @@ locations = [
 [[projects.routes]]
 assignee = "Nguyễn Duy Thành"
 locations = [
-  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa", "Nghệ An",
 ]
-
-[[projects.routes]]
-assignee = "Lê Đức Vinh"
-locations = ["Nghệ An", "Hà Tĩnh"]
 
 [[projects]]
 name = "Dự án Vietlott"
@@ -73,7 +69,15 @@ route_field = "labor_address"
 
 [[projects.routes]]
 assignee = "Vũ Thế Ninh"
-locations = ["Hưng Yên", "Thái Bình", "Điện Biên", "Hải Phòng", "Hải Dương", "Lào Cai", "Yên Bái"]
+locations = ["Hưng Yên", "Thái Bình", "Điện Biên", "Hải Phòng", "Hải Dương", "Lào Cai", "Yên Bái", "Hà Tĩnh", "Hà Giang"]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = ["Hà Nội"]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = ["Lạng Sơn"]
 
 [[projects.routes]]
 assignee = "Đào Anh Vũ"
@@ -90,16 +94,12 @@ locations = ["Sơn La", "Cao Bằng", "Phú Thọ", "Vĩnh Phúc", "Hòa Bình"]
 
 [[projects.routes]]
 assignee = "Nguyễn Duy Thành"
-locations = ["Bắc Ninh", "Bắc Giang", "Nghệ An", "Quảng Ninh"]
+locations = ["Bắc Ninh", "Bắc Giang", "Nghệ An", "Quảng Ninh", "Thanh Hóa"]
 
 [[projects.routes]]
 assignee = "Nguyễn Duy Thành"
 locations = ["Tuyên Quang"]
 subscriber_prefixes = ["bgt2"]
-
-[[projects.routes]]
-assignee = "Lê Đức Vinh"
-locations = ["Hà Tĩnh", "Hà Nội", "Lạng Sơn", "Thanh Hóa", "Hà Giang"]
 
 [[projects]]
 name = "Dự án BTC"
@@ -115,7 +115,7 @@ route_field = "labor_address"
 assignee = "Vũ Thế Ninh"
 locations = [
   "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
-  "Thái Bình", "Điện Biên",
+  "Thái Bình", "Điện Biên", "Hà Tĩnh",
 ]
 
 [[projects.routes]]
@@ -135,12 +135,8 @@ locations = [
 [[projects.routes]]
 assignee = "Nguyễn Duy Thành"
 locations = [
-  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa", "Nghệ An",
 ]
-
-[[projects.routes]]
-assignee = "Lê Đức Vinh"
-locations = ["Nghệ An", "Hà Tĩnh"]
 
 [[projects]]
 name = "Dự án BTC"
@@ -153,7 +149,7 @@ route_field = "labor_address"
 assignee = "Vũ Thế Ninh"
 locations = [
   "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
-  "Thái Bình", "Điện Biên",
+  "Thái Bình", "Điện Biên", "Hà Tĩnh",
 ]
 
 [[projects.routes]]
@@ -173,12 +169,8 @@ locations = [
 [[projects.routes]]
 assignee = "Nguyễn Duy Thành"
 locations = [
-  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa", "Nghệ An",
 ]
-
-[[projects.routes]]
-assignee = "Lê Đức Vinh"
-locations = ["Nghệ An", "Hà Tĩnh"]
 
 [[projects]]
 name = "Dự án Cục BĐTW"
@@ -191,7 +183,7 @@ route_field = "labor_address"
 assignee = "Vũ Thế Ninh"
 locations = [
   "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
-  "Thái Bình", "Điện Biên",
+  "Thái Bình", "Điện Biên", "Hà Tĩnh",
 ]
 
 [[projects.routes]]
@@ -211,9 +203,5 @@ locations = [
 [[projects.routes]]
 assignee = "Nguyễn Duy Thành"
 locations = [
-  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa",
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa", "Nghệ An",
 ]
-
-[[projects.routes]]
-assignee = "Lê Đức Vinh"
-locations = ["Nghệ An", "Hà Tĩnh"]

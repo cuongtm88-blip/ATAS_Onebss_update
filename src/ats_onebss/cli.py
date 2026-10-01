@@ -320,6 +320,7 @@ async def command_login(config: Config) -> None:
     async with BrowserSession(config) as session:
         onebss = OneBSSClient(session)
         sheet = GoogleSheetClient(session)
+        await sheet.open()
         await onebss.open()
         if not await onebss.session_is_logged_in():
             region_key = os.environ.get("ATS_ONEBSS_REGION_KEY", "north")
@@ -337,7 +338,6 @@ async def command_login(config: Config) -> None:
             + (str(expiry) if expiry is not None else "unknown"),
             flush=True,
         )
-        await sheet.open()
         print("ATS_ONEBSS_LOGIN_READY=1", flush=True)
         await asyncio.to_thread(
             input,
@@ -350,9 +350,9 @@ async def command_plan(config: Config) -> None:
     async with BrowserSession(config) as session:
         onebss = OneBSSClient(session)
         sheet = GoogleSheetClient(session)
+        await sheet.open()
         await onebss.open()
         await onebss.wait_until_logged_in()
-        await sheet.open()
         sheet_assignees, balance_scores = await load_sheet_source(
             config, sheet, ledger
         )
@@ -553,6 +553,7 @@ async def open_clients(
 ) -> tuple[OneBSSClient, GoogleSheetClient]:
     onebss = OneBSSClient(session)
     sheet = GoogleSheetClient(session)
+    await sheet.open()
     await onebss.open()
     if not await onebss.session_is_logged_in():
         username, password = load_credentials(region_key)
@@ -560,7 +561,6 @@ async def open_clients(
             await authenticate_with_retries(onebss, username, password, telegram)
         else:
             await onebss.wait_until_logged_in()
-    await sheet.open()
     await sync_pending(config, sheet, ledger, dashboard)
     await onebss.ensure_unassigned_filters()
     await onebss.refresh_tickets()
@@ -639,9 +639,9 @@ async def recover_browser(
     sheet.page = None
     timeout_ms = max(15_000, config.timeout_ms)
     try:
+        await sheet.open()
         await onebss.open()
         await onebss.page.wait_for_selector("#frmGiaoViecVIP", timeout=timeout_ms)
-        await sheet.open()
         await sync_pending(config, sheet, ledger, dashboard)
         await onebss.ensure_unassigned_filters()
         await onebss.refresh_tickets()

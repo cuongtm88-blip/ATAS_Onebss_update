@@ -6,7 +6,7 @@ from ats_onebss.ledger import Ledger
 from ats_onebss.models import Assignment, Ticket
 
 
-def test_ingest_api_payload_uses_exact_field_names_and_default_status(monkeypatch):
+def test_ingest_api_payload_uses_exact_field_names_without_status(monkeypatch):
     request_data = {}
 
     class Response:
@@ -37,6 +37,9 @@ def test_ingest_api_payload_uses_exact_field_names_and_default_status(monkeypatc
         "sheet_timestamp": "29/09/2026 08:34",
         "labor_province": "Hà Nội",
         "project_name": "Dự án BCA",
+        "subscriber_name": "Công ty Ví dụ",
+        "contract_type": "Lắp đặt mới",
+        "labor_address": "Số 1 Trần Phú, Hà Nội",
     }]))
 
     assert result == {"ok": True, "invalid": []}
@@ -49,9 +52,11 @@ def test_ingest_api_payload_uses_exact_field_names_and_default_status(monkeypatc
             "Mã thuê bao": "mnk001",
             "Dịch vụ": "Fiber",
             "Người thực hiện": "Lương Tuấn Thanh",
-            "Trạng thái": "Chưa xử lý",
             "Tỉnh": "Hà Nội",
             "Tên dự án": "Dự án BCA",
+            "Tên thuê bao": "Công ty Ví dụ",
+            "Loại HĐ": "Lắp đặt mới",
+            "Địa chỉ lắp đặt": "Số 1 Trần Phú, Hà Nội",
         }]
     }
 
@@ -59,7 +64,11 @@ def test_ingest_api_payload_uses_exact_field_names_and_default_status(monkeypatc
 def test_ingest_outbox_only_contains_confirmed_new_assignments(tmp_path):
     ledger = Ledger(tmp_path / "ledger.db")
     assignment = ledger.stage(Assignment(
-        Ticket("GD1", "TB1", "Fiber", labor_province="Hà Nội"),
+        Ticket(
+            "GD1", "TB1", "Fiber", labor_province="Hà Nội",
+            subscriber_name="Tên thuê bao mẫu", contract_type="Lắp đặt mới",
+            labor_address="Số 1 Trần Phú, Hà Nội",
+        ),
         ("An",),
         17,
         3,
@@ -71,6 +80,9 @@ def test_ingest_outbox_only_contains_confirmed_new_assignments(tmp_path):
     assert len(pending) == 1
     assert pending[0]["transaction_id"] == "GD1"
     assert pending[0]["labor_province"] == "Hà Nội"
+    assert pending[0]["subscriber_name"] == "Tên thuê bao mẫu"
+    assert pending[0]["contract_type"] == "Lắp đặt mới"
+    assert pending[0]["labor_address"] == "Số 1 Trần Phú, Hà Nội"
     ledger.mark_ingest_keys({assignment.ledger_key})
     assert ledger.pending_ingest_rows() == []
 

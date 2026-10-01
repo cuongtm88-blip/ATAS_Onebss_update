@@ -40,9 +40,11 @@ class IngestApiClient:
                 "Mã thuê bao": row.get("subscriber_id", ""),
                 "Dịch vụ": row.get("service", ""),
                 "Người thực hiện": row.get("assignee", ""),
-                "Trạng thái": "Chưa xử lý",
                 "Tỉnh": row.get("labor_province", ""),
                 "Tên dự án": row.get("project_name", ""),
+                "Tên thuê bao": row.get("subscriber_name", ""),
+                "Loại HĐ": row.get("contract_type", ""),
+                "Địa chỉ lắp đặt": row.get("labor_address", ""),
             }
             for row in records
         ]

@@ -321,7 +321,7 @@ class Ledger:
                 """
                 SELECT ticket_key, transaction_id, subscriber_id, service,
                        assignee, sheet_timestamp, labor_province, project_name,
-                       rule_row
+                       subscriber_name, contract_type, labor_address, rule_row
                 FROM assignments
                 WHERE onebss_saved = 1 AND api_saved = 0
                 ORDER BY created_at, ticket_key, assignee
@@ -330,7 +330,7 @@ class Ledger:
         keys = (
             "ticket_key", "transaction_id", "subscriber_id", "service",
             "assignee", "sheet_timestamp", "labor_province", "project_name",
-            "rule_row",
+            "subscriber_name", "contract_type", "labor_address", "rule_row",
         )
         return [dict(zip(keys, row, strict=True)) for row in rows]
 

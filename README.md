@@ -48,9 +48,10 @@ Khi cần đồng bộ song song sang API nhận phiếu, mở tab `API nhận p
 `X-Ingest-Token` do quản trị API cấp và bật gửi cho miền cần dùng. Token được lưu
 trong Keychain macOS hoặc mã hóa bằng Windows DPAPI, không lưu trong file cài đặt
 hay nhật ký. Sau khi OneBSS xác nhận giao, ứng dụng gửi các field `Ngày giao`,
-`Mã giao dịch`, `Mã thuê bao`, `Dịch vụ`, `Người thực hiện`, `Trạng thái`
-(`Chưa xử lý`), cùng `Tỉnh` và `Tên dự án` nếu có. Gửi API và ghi Google Sheet
-độc lập; lỗi API được giữ trong hàng đợi cục bộ để thử lại ở lần đồng bộ tiếp theo.
+`Mã giao dịch`, `Mã thuê bao`, `Dịch vụ`, `Người thực hiện`, `Tỉnh`, `Tên dự án`,
+`Tên thuê bao`, `Loại HĐ` và `Địa chỉ lắp đặt`. Không gửi field `Trạng thái`.
+Gửi API và ghi Google Sheet độc lập; lỗi API được giữ trong hàng đợi cục bộ để thử
+lại ở lần đồng bộ tiếp theo.
 
 Nếu file Excel có cột `Gửi API`, chỉ các dòng dịch vụ có giá trị `Có` (hoặc dấu
 `x`) mới được đưa vào hàng đợi gửi API; ô trống/`Không` sẽ không gửi. Nếu workbook
@@ -79,6 +80,9 @@ nhận cũ.
 
 Phiên bản 0.9.30 mở website Google Sheets trước OneBSS khi khởi chạy hoặc phục hồi
 Chromium, để Google Sheets luôn được mở ở tab đầu tiên.
+
+Phiên bản 0.9.31 gửi thêm `Tên thuê bao`, `Loại HĐ`, `Địa chỉ lắp đặt` qua API
+nhận phiếu và không gửi trường `Trạng thái`.
 
 ## Nguyên tắc phân bổ
 

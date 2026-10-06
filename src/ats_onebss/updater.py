@@ -4,9 +4,11 @@ import hashlib
 import json
 import os
 import platform
+import posixpath
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -17,6 +19,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import PurePosixPath
 from plistlib import load as load_plist
 
 
@@ -212,22 +215,113 @@ def detect_install_target(
 
 
 def _safe_extract(archive: Path, destination: Path) -> list[Path]:
-    extracted: list[Path] = []
     expanded_size = 0
+    destination.mkdir(parents=True, exist_ok=True)
     root = destination.resolve()
+    entries: list[tuple[zipfile.ZipInfo, Path, int, str | None]] = []
+    names: set[str] = set()
+    symlink_names: set[str] = set()
     with zipfile.ZipFile(archive) as zipped:
         for member in zipped.infolist():
-            target = (destination / member.filename).resolve()
+            archive_path = PurePosixPath(member.filename)
+            if (
+                archive_path.is_absolute()
+                or not archive_path.parts
+                or ".." in archive_path.parts
+                or "\\" in member.filename
+                or re.match(r"^[A-Za-z]:", member.filename)
+            ):
+                raise UpdateError("Gói cập nhật chứa đường dẫn tệp không an toàn.")
+            relative = Path(*archive_path.parts)
+            normalized_name = relative.as_posix().rstrip("/")
+            if normalized_name in names:
+                raise UpdateError("Gói cập nhật chứa đường dẫn tệp bị lặp.")
+            names.add(normalized_name)
+            target = root / relative
+            try:
+                resolved_target = target.resolve()
+            except (OSError, RuntimeError):
+                raise UpdateError("Gói cập nhật chứa đường dẫn tệp không an toàn.") from None
+            if resolved_target != root and root not in resolved_target.parents:
+                raise UpdateError("Gói cập nhật chứa đường dẫn tệp không an toàn.")
             if target != root and root not in target.parents:
                 raise UpdateError("Gói cập nhật chứa đường dẫn tệp không an toàn.")
             mode = member.external_attr >> 16
-            if mode & 0o170000 == 0o120000:
-                raise UpdateError("Gói cập nhật chứa liên kết tượng trưng không được hỗ trợ.")
+            file_type = stat.S_IFMT(mode)
+            is_directory = member.is_dir() or file_type == stat.S_IFDIR
+            link_target = None
+            if file_type == stat.S_IFLNK:
+                try:
+                    link_target = zipped.read(member).decode("utf-8")
+                except (UnicodeDecodeError, OSError, zipfile.BadZipFile):
+                    raise UpdateError("Gói cập nhật chứa liên kết tượng trưng không hợp lệ.") from None
+                if (
+                    not link_target
+                    or "\\" in link_target
+                    or PurePosixPath(link_target).is_absolute()
+                    or re.match(r"^[A-Za-z]:", link_target)
+                ):
+                    raise UpdateError("Gói cập nhật chứa liên kết tượng trưng không an toàn.")
+                resolved_link = posixpath.normpath(
+                    posixpath.join(archive_path.parent.as_posix(), link_target)
+                )
+                if resolved_link == ".." or resolved_link.startswith("../") or resolved_link.startswith("/"):
+                    raise UpdateError("Gói cập nhật chứa liên kết tượng trưng không an toàn.")
+                symlink_names.add(normalized_name)
+            elif file_type not in {0, stat.S_IFREG, stat.S_IFDIR}:
+                raise UpdateError("Gói cập nhật chứa kiểu tệp đặc biệt không được hỗ trợ.")
             expanded_size += member.file_size
             if expanded_size > MAX_EXPANDED_SIZE:
                 raise UpdateError("Gói cập nhật giải nén vượt quá giới hạn.")
-        zipped.extractall(destination)
-        extracted = [destination / item.filename for item in zipped.infolist()]
+            entries.append((member, target, mode, link_target))
+
+        for member, target, _mode, link_target in entries:
+            if link_target is not None:
+                continue
+            relative = target.relative_to(root)
+            if any(
+                ancestor.as_posix() in symlink_names
+                for ancestor in relative.parents
+                if ancestor != Path(".")
+            ):
+                raise UpdateError("Gói cập nhật chứa tệp bên trong liên kết tượng trưng.")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if member.is_dir() or stat.S_IFMT(member.external_attr >> 16) == stat.S_IFDIR:
+                target.mkdir(exist_ok=True)
+            else:
+                try:
+                    with zipped.open(member) as source, target.open("xb") as output:
+                        shutil.copyfileobj(source, output)
+                except (OSError, RuntimeError, zipfile.BadZipFile) as error:
+                    raise UpdateError(f"Không giải nén được gói cập nhật: {error}") from error
+                if os.name != "nt" and stat.S_IFMT(_mode) == stat.S_IFREG:
+                    target.chmod(_mode & 0o777)
+
+        for member, target, _mode, link_target in entries:
+            if link_target is None:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                target.symlink_to(link_target)
+            except OSError as error:
+                raise UpdateError(f"Không tạo được liên kết trong gói cập nhật: {error}") from error
+
+        if os.name != "nt":
+            for member, target, mode, link_target in reversed(entries):
+                if link_target is None and (
+                    member.is_dir() or stat.S_IFMT(mode) == stat.S_IFDIR
+                ) and mode & 0o777:
+                    target.chmod(mode & 0o777)
+        extracted = [target for _member, target, _mode, _link_target in entries]
+        for _member, target, _mode, link_target in entries:
+            if link_target is None:
+                continue
+            try:
+                resolved_link = target.resolve()
+            except (OSError, RuntimeError):
+                raise UpdateError("Gói cập nhật chứa liên kết tượng trưng vòng hoặc không an toàn.") from None
+            if resolved_link != root and root not in resolved_link.parents:
+                raise UpdateError("Gói cập nhật chứa liên kết tượng trưng không an toàn.")
     return extracted
 
 

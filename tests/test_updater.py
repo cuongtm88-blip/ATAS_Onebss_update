@@ -1,4 +1,5 @@
 import json
+import stat
 import zipfile
 
 import pytest
@@ -81,6 +82,54 @@ def test_safe_extract_rejects_zip_slip(tmp_path):
         zipped.writestr("../escape.txt", "bad")
 
     with pytest.raises(UpdateError, match="đường dẫn.*không an toàn"):
+        _safe_extract(archive, tmp_path / "extract")
+
+
+def test_safe_extract_restores_internal_symlinks_and_executable_modes(tmp_path):
+    archive = tmp_path / "safe-links.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        executable = zipfile.ZipInfo("App/Contents/MacOS/ATS-OneBSS")
+        executable.create_system = 3
+        executable.external_attr = (stat.S_IFREG | 0o755) << 16
+        zipped.writestr(executable, "binary")
+        link = zipfile.ZipInfo("App/Contents/Resources/ATS-OneBSS")
+        link.create_system = 3
+        link.external_attr = (stat.S_IFLNK | 0o777) << 16
+        zipped.writestr(link, "../MacOS/ATS-OneBSS")
+
+    destination = tmp_path / "extract"
+    paths = _safe_extract(archive, destination)
+
+    restored_link = destination / "App/Contents/Resources/ATS-OneBSS"
+    restored_executable = destination / "App/Contents/MacOS/ATS-OneBSS"
+    assert restored_link.is_symlink()
+    assert restored_link.resolve() == restored_executable.resolve()
+    assert restored_executable.stat().st_mode & 0o111
+    assert len(paths) == 2
+
+
+def test_safe_extract_rejects_symlink_escape(tmp_path):
+    archive = tmp_path / "unsafe-link.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        link = zipfile.ZipInfo("App/Contents/Resources/outside")
+        link.create_system = 3
+        link.external_attr = (stat.S_IFLNK | 0o777) << 16
+        zipped.writestr(link, "../../../../outside")
+
+    with pytest.raises(UpdateError, match="liên kết tượng trưng không an toàn"):
+        _safe_extract(archive, tmp_path / "extract")
+
+
+def test_safe_extract_rejects_entries_nested_under_symlink(tmp_path):
+    archive = tmp_path / "unsafe-nested-link.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        link = zipfile.ZipInfo("App/Contents/Resources/Frameworks")
+        link.create_system = 3
+        link.external_attr = (stat.S_IFLNK | 0o777) << 16
+        zipped.writestr(link, "../Frameworks")
+        zipped.writestr("App/Contents/Resources/Frameworks/evil", "bad")
+
+    with pytest.raises(UpdateError, match="bên trong liên kết tượng trưng"):
         _safe_extract(archive, tmp_path / "extract")
 
 

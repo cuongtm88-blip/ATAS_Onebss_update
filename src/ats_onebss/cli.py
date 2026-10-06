@@ -374,10 +374,21 @@ async def sync_pending(
 ) -> None:
     ingest = IngestApiClient.from_environment()
     pending_api_rows = ledger.pending_ingest_rows()
-    api_rule_rows = {rule.row_number for rule in load_rules(config.rules_file)
-                     if rule.send_to_api}
+    # Rule row numbers are not stable identifiers: in Group DV workbooks they
+    # point to the parent group row and can change when the workbook is edited.
+    # A queued row stores the Google-Sheet/API service name, so use that stable
+    # value to revalidate the API opt-in against the currently active workbook.
+    api_flags_by_service: dict[str, list[bool]] = {}
+    for rule in load_rules(config.rules_file):
+        service_name = normalize(rule.sheet_service or rule.service)
+        api_flags_by_service.setdefault(service_name, []).append(rule.send_to_api)
+    api_enabled_services = {
+        service for service, flags in api_flags_by_service.items()
+        if flags and all(flags)
+    }
     ingest_pending = [
-        row for row in pending_api_rows if row["rule_row"] in api_rule_rows
+        row for row in pending_api_rows
+        if normalize(row["service"]) in api_enabled_services
     ]
     disabled_api_count = len(pending_api_rows) - len(ingest_pending)
     if disabled_api_count:

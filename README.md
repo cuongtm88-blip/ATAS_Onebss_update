@@ -1,5 +1,10 @@
 # ATS OneBSS
 
+Phiên bản 0.9.34 sửa lỗi hàng đợi API dùng số dòng Excel cũ để kiểm tra
+quyền gửi. Sau khi thay đổi/chèn dòng trong file Giao phiếu, app đối chiếu
+quyền gửi theo tên dịch vụ đã ánh xạ sang Google Sheet, tránh gửi nhầm các
+dịch vụ đang tắt `Gửi API`.
+
 Repository này dành riêng cho **Miền Bắc**. Các bản phát hành miền Trung và
 miền Nam sẽ dùng repository/cấu hình riêng khi được triển khai; không dùng
 chung gói quy tắc hoặc cấu hình dữ liệu giữa các miền.

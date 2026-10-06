@@ -36,6 +36,55 @@ def test_unique_tickets_keeps_only_one_visible_duplicate_per_cycle():
     ]
 
 
+def test_api_outbox_uses_mapped_service_instead_of_unstable_rule_row(monkeypatch):
+    sent = []
+    marked = []
+
+    class FakeLedger:
+        def pending_ingest_rows(self):
+            return [
+                {"ticket_key": "old-voice", "service": "Voice Brandname", "rule_row": 15},
+                {"ticket_key": "fiber", "service": "Fiber", "rule_row": 7},
+            ]
+
+        def mark_ingest_keys(self, keys):
+            marked.extend(keys)
+
+        def pending_sheet_rows(self):
+            return []
+
+        def pending_dashboard_rows(self):
+            return []
+
+    class FakeIngest:
+        enabled = True
+
+        async def push_pending(self, rows):
+            sent.extend(rows)
+            return {"invalid": []}
+
+    rules = [
+        # Voice Brandname had an old queue row with this number; the number
+        # now belongs to an API-enabled rule, but this service is opted out.
+        type("Rule", (), {
+            "row_number": 10, "service": "Voice Brandname",
+            "sheet_service": "Voice Brandname", "send_to_api": False,
+        })(),
+        type("Rule", (), {
+            "row_number": 7, "service": "Fiber", "sheet_service": "Fiber",
+            "send_to_api": True,
+        })(),
+    ]
+    monkeypatch.setattr(cli, "load_rules", lambda _path: rules)
+    monkeypatch.setattr(cli.IngestApiClient, "from_environment", lambda: FakeIngest())
+    config = SimpleNamespace(rules_file="rules.xlsx")
+
+    asyncio.run(cli.sync_pending(config, object(), FakeLedger(), SimpleNamespace(enabled=False)))
+
+    assert [row["ticket_key"] for row in sent] == ["fiber"]
+    assert marked == ["fiber"]
+
+
 def test_recover_browser_restarts_context_when_page_reload_fails(monkeypatch):
     calls = []
 

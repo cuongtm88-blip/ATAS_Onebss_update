@@ -204,11 +204,184 @@ def member_group(rules: list[ServiceRule], name: str) -> str:
     return groups.pop()
 
 
+def _load_group_rules(workbook) -> list[ServiceRule]:
+    """Expand percentage-by-group rules through the OneBSS service map."""
+    rule_sheet = workbook[workbook.sheetnames[0]]
+    headers = [
+        str(rule_sheet.cell(2, col).value or "").strip()
+        for col in range(1, rule_sheet.max_column + 1)
+    ]
+    header_columns = {
+        unaccent(header): index + 1
+        for index, header in enumerate(headers) if header
+    }
+    group_column = header_columns["group dv"]
+    points_column = header_columns.get("diem quy doi")
+    condition_column = header_columns.get("quy tac")
+    api_column = header_columns.get("gui api")
+    if not points_column or not condition_column:
+        raise RuleError(
+            "File Giao phiếu dạng Group DV phải có cột Điểm quy đổi và Quy tắc ở dòng 2"
+        )
+    member_start = max(group_column, points_column, condition_column) + 1
+    member_end = api_column - 1 if api_column else rule_sheet.max_column
+    if member_start > member_end:
+        raise RuleError("File Giao phiếu dạng Group DV không có cột nhân sự")
+
+    group_by_column: dict[int, str] = {}
+    current_group = ""
+    for col in range(member_start, member_end + 1):
+        label = str(rule_sheet.cell(1, col).value or "").strip()
+        if label:
+            current_group = label
+        group_by_column[col] = current_group or "Nhóm 1"
+
+    grouped_rules: dict[tuple[str, Decimal], tuple[int, str, Decimal, tuple[Member, ...], bool, bool, bool]] = {}
+    for row in range(3, rule_sheet.max_row + 1):
+        group_name = str(rule_sheet.cell(row, group_column).value or "").strip()
+        if not group_name:
+            continue
+        raw_points = rule_sheet.cell(row, points_column).value
+        try:
+            points = Decimal(str(raw_points or 0))
+        except Exception as error:
+            raise RuleError(f"Điểm quy đổi không hợp lệ tại dòng {row}: {raw_points!r}") from error
+        condition = str(rule_sheet.cell(row, condition_column).value or "").strip()
+        members: list[Member] = []
+        share_total = Decimal(0)
+        for col in range(member_start, member_end + 1):
+            raw_share = rule_sheet.cell(row, col).value
+            if raw_share in (None, ""):
+                continue
+            try:
+                text = str(raw_share).strip()
+                is_percent = text.endswith("%")
+                share = Decimal(text.removesuffix("%"))
+                if is_percent or (isinstance(raw_share, (int, float)) and share > 1):
+                    share /= 100
+            except Exception as error:
+                raise RuleError(
+                    f"Tỷ lệ nhân sự không hợp lệ tại dòng {row}, cột {col}: {raw_share!r}"
+                ) from error
+            if share < 0 or share > 1:
+                raise RuleError(
+                    f"Tỷ lệ nhân sự phải từ 0% đến 100% tại dòng {row}, cột {col}"
+                )
+            if share:
+                name = headers[col - 1]
+                if not name:
+                    raise RuleError(f"Thiếu tên nhân sự ở cột {col}, dòng {row}")
+                members.append(Member(name, group_by_column[col], "Chính", share))
+                share_total += share
+        if not members:
+            raise RuleError(f"Nhóm dịch vụ {group_name} không có nhân sự được phân tỷ lệ")
+        if abs(share_total - Decimal(1)) > Decimal("0.000001"):
+            raise RuleError(
+                f"Tổng tỷ lệ của nhóm dịch vụ {group_name} tại dòng {row} là "
+                f"{share_total * 100}%, phải bằng 100%"
+            )
+        api_value = (
+            unaccent(str(rule_sheet.cell(row, api_column).value or "").strip())
+            if api_column else ""
+        )
+        send_to_api = api_value in {"co", "yes", "true", "1", "x", "gui", "gui api"}
+        policy = unaccent(condition)
+        group_key = (unaccent(group_name), points)
+        if group_key in grouped_rules:
+            raise RuleError(
+                f"Nhóm DV {group_name} có nhiều quy tắc cùng {points} điểm; "
+                "không thể ánh xạ dịch vụ một cách duy nhất"
+            )
+        grouped_rules[group_key] = (
+            row, group_name, points, tuple(members),
+            "khong tinh diem" not in policy,
+            "khong dua vao danh sach" not in policy,
+            send_to_api,
+        )
+
+    if "group dv" not in {
+        unaccent(str(rule_sheet.cell(2, col).value or "").strip())
+        for col in range(1, rule_sheet.max_column + 1)
+    }:
+        raise RuleError("Thiếu cột Group DV")
+    if len(workbook.worksheets) < 2:
+        raise RuleError("File Giao phiếu dạng Group DV cần có sheet Group DV để ánh xạ dịch vụ")
+    map_sheet = next(
+        (sheet for sheet in workbook.worksheets[1:]
+         if unaccent(sheet.title) == "group dv"),
+        None,
+    )
+    if map_sheet is None:
+        raise RuleError("Không tìm thấy sheet Group DV để ánh xạ dịch vụ")
+    map_headers = {
+        unaccent(str(map_sheet.cell(1, col).value or "").strip()): col
+        for col in range(1, map_sheet.max_column + 1)
+    }
+    required = ("dich vu", "dich vu tren google sheet", "diem quy doi", "group dv")
+    if any(header not in map_headers for header in required):
+        raise RuleError(
+            "Sheet Group DV cần có các cột Dịch vụ, Dịch vụ trên Google Sheet, "
+            "Điểm quy đổi và Group DV"
+        )
+    rules: list[ServiceRule] = []
+    signatures: set[tuple] = set()
+    for row in range(2, map_sheet.max_row + 1):
+        service = str(map_sheet.cell(row, map_headers["dich vu"]).value or "").strip()
+        group_name = str(map_sheet.cell(row, map_headers["group dv"]).value or "").strip()
+        if not service and not group_name:
+            continue
+        if not service or not group_name:
+            raise RuleError(f"Thiếu Dịch vụ hoặc Group DV tại sheet Group DV, dòng {row}")
+        raw_points = map_sheet.cell(row, map_headers["diem quy doi"]).value
+        try:
+            points = Decimal(str(raw_points or 0))
+        except Exception as error:
+            raise RuleError(f"Điểm quy đổi không hợp lệ ở sheet Group DV, dòng {row}") from error
+        grouped = grouped_rules.get((unaccent(group_name), points))
+        if grouped is None:
+            raise RuleError(
+                f"Không tìm thấy quy tắc nhóm {group_name} với {points} điểm "
+                f"(sheet Group DV, dòng {row})"
+            )
+        base_row, _base_group_name, _base_points, members, count_points, write_to_sheet, send_to_api = grouped
+        base_condition = str(rule_sheet.cell(base_row, condition_column).value or "").strip()
+        map_condition_column = map_headers.get("quy tac group")
+        map_condition = (
+            str(map_sheet.cell(row, map_condition_column).value or "").strip()
+            if map_condition_column else ""
+        )
+        if base_condition and map_condition and unaccent(base_condition) != unaccent(map_condition):
+            raise RuleError(
+                f"Quy tắc group không khớp tại sheet Group DV, dòng {row}"
+            )
+        condition = base_condition or map_condition
+        raw_sheet_service = map_sheet.cell(
+            row, map_headers["dich vu tren google sheet"]
+        ).value
+        sheet_service = str(raw_sheet_service or "").strip() or service
+        signature = (
+            normalize(service), normalize(sheet_service), points, normalize(condition),
+            tuple((normalize(m.name), normalize(m.group), m.target_share) for m in members),
+        )
+        if signature in signatures:
+            raise RuleError(f"Ánh xạ dịch vụ bị lặp tại sheet Group DV, dòng {row}")
+        signatures.add(signature)
+        rules.append(ServiceRule(
+            base_row, service, points, condition, members, sheet_service,
+            count_points, write_to_sheet, send_to_api,
+        ))
+    if not rules:
+        raise RuleError("Sheet Group DV không có dòng ánh xạ dịch vụ hợp lệ")
+    return rules
+
+
 def load_rules(path: str | Path) -> list[ServiceRule]:
     workbook = load_workbook(Path(path), data_only=True, read_only=True)
     sheet = workbook[workbook.sheetnames[0]]
     headers = [str(sheet.cell(2, col).value or "").strip() for col in range(1, sheet.max_column + 1)]
     header_columns = {unaccent(header): index + 1 for index, header in enumerate(headers) if header}
+    if "group dv" in header_columns:
+        return _load_group_rules(workbook)
     service_column = header_columns.get("dich vu")
     sheet_service_column = header_columns.get("dich vu tren google sheet")
     points_column = header_columns.get("diem quy doi")
@@ -301,7 +474,12 @@ def _condition_matches(rule: ServiceRule, ticket: Ticket) -> bool:
     if not condition:
         return True
     if "cot vip xu ly" in condition:
-        return True
+        vip = unaccent(ticket.vip_status)
+        if "giam sat" in condition:
+            return "giam sat" in vip
+        if "xu ly" in condition:
+            return "xu ly" in vip
+        return False
     if "loai kenh" in condition:
         channel = unaccent(ticket.channel_type)
         if "noi tinh" in condition and "lien tinh" not in condition:

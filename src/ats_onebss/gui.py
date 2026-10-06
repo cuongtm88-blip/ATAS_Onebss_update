@@ -98,7 +98,7 @@ RESOURCE_FILES = (
     "regions.toml",
     "config.toml",
     "project_rules.toml",
-    "Giao phiếu.xlsx",
+    "Giao phiếu_demo2.xlsx",
 )
 
 
@@ -125,7 +125,7 @@ def editable_rules_file() -> Path | None:
     app_bundle = next((parent for parent in executable.parents if parent.suffix == ".app"), None)
     if app_bundle is None:
         return None
-    candidate = app_bundle.parent.parent / "Giao phiếu.xlsx"
+    candidate = app_bundle.parent.parent / "Giao phiếu_demo2.xlsx"
     return candidate if candidate.is_file() else None
 
 
@@ -156,7 +156,7 @@ def prepare_runtime_root() -> Path:
     # only when that editable source is newer, so a manual runtime adjustment
     # is never overwritten by an older bundled default.
     editable_rules = editable_rules_file()
-    runtime_rules = target / "Giao phiếu.xlsx"
+    runtime_rules = target / "Giao phiếu_demo2.xlsx"
     if editable_rules and (
         not runtime_rules.exists()
         or editable_rules.stat().st_mtime_ns > runtime_rules.stat().st_mtime_ns
@@ -470,7 +470,7 @@ class ATSOneBSSWindow(QMainWindow):
         region_row.addWidget(self.cycle_minutes)
         self.update_rules_button = QPushButton("Cập nhật Giao phiếu")
         self.update_rules_button.setToolTip(
-            "Chọn file Giao phiếu.xlsx mới cho miền đang hoạt động. "
+            "Chọn file Giao phiếu mới cho miền đang hoạt động. "
             "File sẽ được kiểm tra trước khi thay thế."
         )
         region_row.addWidget(self.update_rules_button)
@@ -863,7 +863,7 @@ class ATSOneBSSWindow(QMainWindow):
         )
         source, _selected_filter = QFileDialog.getOpenFileName(
             self,
-            "Chọn file Giao phiếu.xlsx",
+            "Chọn file Giao phiếu",
             str(preferred_source),
             "Excel Workbook (*.xlsx)",
         )

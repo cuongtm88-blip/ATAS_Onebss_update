@@ -61,6 +61,40 @@ locations = [
 ]
 
 [[projects]]
+name = "Dự án BHXH"
+priority = 90
+match_fields = ["customer_name"]
+contains = "Ban Quản Lý Đầu Tư Và Xây Dựng Ngành Bảo Hiểm Xã Hội"
+route_field = "labor_address"
+
+[[projects.routes]]
+assignee = "Vũ Thế Ninh"
+locations = [
+  "Thái Nguyên", "Bắc Kạn", "Hải Phòng", "Hải Dương", "Hưng Yên",
+  "Thái Bình", "Điện Biên", "Hà Tĩnh",
+]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = [
+  "Ninh Bình", "Nam Định", "Hà Nam", "Bắc Ninh", "Bắc Giang", "TP BG", "Hà Nội",
+  "Lai Châu",
+]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = [
+  "Sơn La", "Cao Bằng", "Lào Cai", "Yên Bái", "Phú Thọ", "Hòa Bình",
+  "Vĩnh Phúc",
+]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = [
+  "Tuyên Quang", "Hà Giang", "Quảng Ninh", "Lạng Sơn", "Thanh Hóa", "Nghệ An",
+]
+
+[[projects]]
 name = "Dự án Vietlott"
 priority = 90
 match_fields = ["customer_name"]
@@ -108,6 +142,7 @@ match_fields = ["customer_name"]
 contains = [
   "Tổng Cục Dự Trữ Nhà Nước",
   "Cục Công Nghệ Thông Tin & Thống Kê Hải Quan",
+  "Kho Bạc Nhà Nước",
 ]
 route_field = "labor_address"
 

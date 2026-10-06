@@ -1,11 +1,12 @@
 import asyncio
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 from ats_onebss.browser import (
     GoogleSheetClient,
     _sheet_assignment_index,
+    _sheet_assignment_key,
     _sheet_name_for_timestamp,
     _sheet_month_scores,
     _is_sheet_data_row,
@@ -20,6 +21,67 @@ def test_sheet_subscriber_key_treats_text_marker_as_blank():
     assert _sheet_subscriber_key("'") == ""
     assert _sheet_subscriber_key("'02433215206") == "02433215206"
     assert _sheet_subscriber_key("02433215206") == "02433215206"
+
+
+def test_sheet_assignment_key_ignores_sheet_text_formatting_differences():
+    columns = (
+        "transaction_id", "subscriber_id", "service", "assignee",
+        "subscriber_name", "contract_type", "labor_address", "labor_province",
+    )
+    local_row = [
+        "VNP-LD/00079409", "02838888191", "SIP", "Nguyễn Hoàng Dương",
+        "Ngân Hàng TNHH Mtv Shinhan Việt Nam", "Lắp đặt mới",
+        "''''Tầng 3, Tòa nhà A", "TP Hồ Chí Minh",
+    ]
+    sheet_row = [*local_row]
+    sheet_row[6] = "'''Tầng 3, Tòa nhà A"
+
+    assert _sheet_assignment_key("02/10/2026 15:56", local_row, columns) == (
+        _sheet_assignment_key("02/10/2026 15:56", sheet_row, columns)
+    )
+
+
+def test_append_records_marks_already_present_rows_without_pasting():
+    columns = (
+        "transaction_id", "subscriber_id", "service", "assignee",
+        "subscriber_name", "contract_type", "labor_address", "labor_province",
+    )
+    config = SimpleNamespace(
+        sheet_columns=columns,
+        sheet_name="Tháng 10/2026",
+        sheet_name_template="Tháng {month}/{year}",
+        timezone="Asia/Ho_Chi_Minh",
+        sheet_data_start_row=9,
+    )
+    client = GoogleSheetClient(SimpleNamespace(config=config))
+    page = SimpleNamespace(locator=Mock(), url="https://docs.google.com/spreadsheets/d/id/edit?gid=4")
+    page.goto = AsyncMock()
+    client.page = page
+    client.activate_sheet = AsyncMock()
+    existing_row = [
+        "02/10/2026 15:56", "VNP-LD/00079409", "02838888191", "SIP",
+        "Nguyễn Hoàng Dương", "Ngân Hàng TNHH Mtv Shinhan Việt Nam",
+        "Lắp đặt mới", "'''Tầng 3, Tòa nhà A", "TP Hồ Chí Minh",
+    ]
+    client.export_rows = AsyncMock(return_value=[existing_row])
+
+    with patch("ats_onebss.browser._visible", new=AsyncMock(return_value=object())):
+        asyncio.run(client.append_records([{
+            "sheet_timestamp": "02/10/2026 15:56",
+            "sheet_ordinal": "1",
+            "transaction_id": "VNP-LD/00079409",
+            "subscriber_id": "02838888191",
+            "service": "SIP",
+            "assignee": "Nguyễn Hoàng Dương",
+            "subscriber_name": "Ngân Hàng TNHH Mtv Shinhan Việt Nam",
+            "contract_type": "Lắp đặt mới",
+            "labor_address": "''''Tầng 3, Tòa nhà A",
+            "labor_province": "TP Hồ Chí Minh",
+        }]))
+
+    client.export_rows.assert_awaited_once_with("Tháng 10/2026")
+    client.activate_sheet.assert_awaited_once_with("Tháng 10/2026")
+    page.goto.assert_not_awaited()
 
 
 def test_sheet_text_input_preserves_leading_zeroes():

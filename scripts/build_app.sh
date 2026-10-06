@@ -19,7 +19,7 @@ uv run pyinstaller \
   --add-data "regions.toml:." \
   --add-data "config.toml:." \
   --add-data "project_rules.toml:." \
-  --add-data "Giao phiếu.xlsx:." \
+  --add-data "Giao phiếu_demo2.xlsx:." \
   --add-data "assets/vinaphone-logo.png:assets" \
   src/ats_onebss/gui_main.py
 

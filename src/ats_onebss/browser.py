@@ -203,6 +203,20 @@ def _sheet_text_input(value: str) -> str:
     return f"'{value}" if value else ""
 
 
+def _sheet_assignment_key(
+    timestamp: str, row: list[str], columns: tuple[str, ...],
+) -> tuple[str, str, str, str, str]:
+    """Identify one assignment independently of mutable or Sheets-formatted fields."""
+    values = dict(zip(columns, row, strict=True))
+    return (
+        timestamp.strip(),
+        values["transaction_id"].strip(),
+        _sheet_subscriber_key(values["subscriber_id"]),
+        normalize(values["service"]),
+        normalize(values["assignee"]),
+    )
+
+
 def _sheet_name_for_timestamp(timestamp: str, template: str, timezone: str) -> str:
     """Resolve the monthly tab from an assignment's local timestamp."""
     if timestamp:
@@ -2167,33 +2181,21 @@ class GoogleSheetClient:
                 "Dữ liệu Google Sheet không khớp số cột đã cấu hình"
             )
 
-        def key_value(column: str, value: str) -> str:
-            if column == "transaction_id":
-                return value.strip()
-            if column == "subscriber_id":
-                return _sheet_subscriber_key(value)
-            return normalize(value)
-
-        def row_key(row: list[str], stamp: str) -> tuple[str, ...]:
-            return (stamp,) + tuple(
-                key_value(column, value)
-                for column, value in zip(columns, row, strict=True)
-            )
-
         expected_rows = [
-            (row_key(row, stamp), row, stamp, ordinal)
+            (_sheet_assignment_key(stamp, row, columns), row, stamp, ordinal)
             for row, stamp, ordinal in keyed_rows
         ]
         last_missing = list(expected_rows)
 
         def existing_counts(exported: list[list[str]]) -> Counter[tuple[str, ...]]:
             return Counter(
-                (cell_row[0].strip(),) + tuple(
-                    key_value(
-                        column,
-                        cell_row[index + 1] if len(cell_row) > index + 1 else "",
-                    )
-                    for index, column in enumerate(columns)
+                _sheet_assignment_key(
+                    cell_row[0],
+                    [
+                        cell_row[index + 1] if len(cell_row) > index + 1 else ""
+                        for index in range(len(columns))
+                    ],
+                    columns,
                 )
                 for cell_row in exported if _is_sheet_data_row(cell_row)
             )

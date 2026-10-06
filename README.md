@@ -41,7 +41,7 @@ khi bấm nút `Đăng nhập`; nếu chưa lưu thông tin hoặc chưa bật T
 đăng nhập thủ công như trước.
 
 Công cụ tự động đọc các phiếu đang hiển thị trên OneBSS, đối chiếu quy tắc trong
-`Giao phiếu.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
+`Giao phiếu_demo2.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
 Google Sheet theo tháng giao phiếu, rồi bấm `Gửi SMS`.
 
 Khi cần đồng bộ song song sang API nhận phiếu, mở tab `API nhận phiếu`, nhập
@@ -84,23 +84,34 @@ Chromium, để Google Sheets luôn được mở ở tab đầu tiên.
 Phiên bản 0.9.31 gửi thêm `Tên thuê bao`, `Loại HĐ`, `Địa chỉ lắp đặt` qua API
 nhận phiếu và không gửi trường `Trạng thái`.
 
+Phiên bản 0.9.32 đối chiếu xác nhận Google Sheet theo thời điểm, mã giao dịch,
+mã thuê bao, dịch vụ và người thực hiện; bỏ qua khác biệt định dạng ở các cột
+khác để tránh dán lặp phiếu khi Google Sheets biến đổi dấu nháy trong địa chỉ.
+
+Phiên bản 0.9.33 đọc file Giao phiếu dạng Group DV với tỷ lệ nhân sự theo dịch
+vụ, ánh xạ dịch vụ OneBSS sang tên Google Sheet/API, và chọn một người nhận duy
+nhất theo tỷ lệ tải tháng đã chuẩn hóa theo nhóm nhân sự.
+
 ## Nguyên tắc phân bổ
 
-- Mỗi phiếu chọn người có mức tải điểm tháng đã chuẩn hóa thấp nhất trong đúng
-  nhóm và trong tập nhân sự đủ điều kiện nhận dịch vụ. Sang tháng mới, điểm cân
-  bằng bắt đầu lại từ dữ liệu của tháng đó.
-- Nếu một phiếu cần người của nhiều nhóm, điểm phiếu được chia đều cho số người nhận.
+- Với file dạng Group DV, mỗi phiếu được giao cho một người trong các nhân sự có
+  tỷ lệ lớn hơn 0 ở dòng quy tắc. App ưu tiên người có tỷ lệ thực hiện tháng thấp
+  nhất sau khi chuẩn hóa theo nhóm gốc và hệ số mục tiêu; tỷ lệ % của dịch vụ chỉ
+  phân xử khi mức tải tháng bằng nhau. Vì vậy tỷ lệ % là định hướng, không phải
+  quota cứng.
+- Với workbook kiểu cũ, nếu một phiếu cần người ở nhiều nhóm thì điểm phiếu được
+  chia đều cho số người nhận.
 - Với cấu hình mặc định `use_backup_members = true`, `Chính` và `Phụ` đều là
   người được phép nhận dịch vụ; không có quota số lượng phiếu theo hai vai trò.
-- Tỷ lệ thực hiện của mỗi người là điểm tháng của người đó chia cho điểm trung
-  bình của các cá nhân trong cùng nhóm. Chương trình đọc điểm tháng hiện tại từ
-  Google Sheet và chọn người có mức tải chuẩn hóa thấp nhất trong tập hợp lệ.
+- Tỷ lệ thực hiện của mỗi người là điểm tháng chia cho điểm trung bình của nhóm
+  gốc. File Group DV giữ quần thể chuẩn 14 người Nhóm 1 và 4 người Nhóm 2; Lê Đức
+  Tuấn vẫn được xét cho dịch vụ của cả hai nhóm nhưng điểm tải tháng của anh ấy
+  được so với nhóm gốc Nhóm 2.
 - Mức tải chuẩn hóa có tính hệ số cá nhân trong
   `[balance.member_target_ratios]`: Lương Tuấn Thanh, Đào Anh Vũ và Nguyễn Hoàng
-  Dương có hệ số 1.10; Đoàn Hải Hà, Nguyễn Duy Thành và Ngọc Thành Kiên có hệ số
-  1.05; tất cả nhân sự còn lại mặc định 1.00. Vì điểm trung bình nhóm là hệ số
-  chung khi so sánh, việc chọn theo `điểm / hệ số` tương đương chọn người có tỷ
-  lệ thực hiện thấp nhất so với mức được phép của họ.
+  Dương có hệ số 1.10; Đoàn Hải Hà và Nguyễn Duy Thành có hệ số 1.05; tất cả
+  nhân sự còn lại mặc định 1.00. App chia điểm tháng cho điểm trung bình nhóm và
+  hệ số cá nhân để so tải giữa hai nhóm.
 - Các phiếu thường cùng `Tên KH` + `Địa chỉ LĐ` + dịch vụ được gom về một nhân
   sự đủ điều kiện; khi gặp nhóm lần đầu, chọn người có tải điểm chuẩn hóa thấp
   nhất. Thiếu một trong ba trường thì không ghim theo nhóm địa chỉ và phiếu vẫn
@@ -122,11 +133,13 @@ nhận phiếu và không gửi trường `Trạng thái`.
   `Cục Viễn Thông & Cơ Yếu Bca`, sau đó định tuyến theo `Địa chỉ LĐ`. Nếu địa chỉ
   không khớp tỉnh/thành đã khai báo, phiếu được đưa vào `preview_skipped.csv` thay
   vì giao theo quy tắc dịch vụ thông thường.
+- `Dự án BHXH`: nhận diện khi `Tên KH` chứa `Ban Quản Lý Đầu Tư Và Xây Dựng
+  Ngành Bảo Hiểm Xã Hội`; dùng cùng bảng định tuyến tỉnh/thành như Dự án BCA.
 - `Dự án Cục BĐTW`: nhận diện khi `Tên KH` chứa `Cục BĐTW` và dùng cùng bảng
   định tuyến tỉnh/thành theo `Địa chỉ LĐ` như Dự án BCA.
 - `Dự án BTC`: nhận diện khi `Tên KH` chứa `Tổng Cục Dự Trữ Nhà Nước`,
-  `Tổng Cục Thuế` hoặc `Cục Công Nghệ Thông Tin & Thống Kê Hải Quan`; dùng
-  cùng bảng định tuyến tỉnh/thành như Dự án BCA.
+  `Tổng Cục Thuế`, `Cục Công Nghệ Thông Tin & Thống Kê Hải Quan` hoặc
+  `Kho Bạc Nhà Nước`; dùng cùng bảng định tuyến tỉnh/thành như Dự án BCA.
 - `Dự án Vietlott`: nhận diện khi `Tên KH` chứa
   `Công Ty Cổ Phần Đầu Tư Kỹ Thuật Berjaya Gia Thịnh`. Tuyến cố định gồm Vũ
   Thế Ninh (Hưng Yên, Thái Bình, Điện Biên, Hải Phòng, Hải Dương, Lào Cai,
@@ -361,7 +374,7 @@ nhiệm vụ `Kiểm tra và xử lý`, rồi sửa người thực hiện tại
 tiếp theo dùng đúng số liệu hiện tại.
 
 Quy tắc dự án trong `project_rules.toml` hiện gồm `Đài THVN`, `Cục Quản Trị NHNN - Kênh phục vụ HNTH`, `Dự án BCA`,
-`Dự án Cục BĐTW`, `Dự án BTC` và `Dự án Vietlott`. Các dự án được nhận diện
+`Dự án BHXH`, `Dự án Cục BĐTW`, `Dự án BTC` và `Dự án Vietlott`. Các dự án được nhận diện
 theo `Tên KH`; định tuyến theo `Địa chỉ LĐ` và dự phòng bằng `Tỉnh LĐ` khi địa
 chỉ chính không xác định được tỉnh/thành. Riêng Vietlott tách Tuyên Quang theo
 tiền tố mã thuê bao `BGT2` và `BGT5`.
@@ -395,6 +408,6 @@ Trên Windows, chạy PowerShell:
 ```
 
 Kết quả nằm trong `dist/ATS-OneBSS`. Khi chuyển máy, sao chép cả thư mục này cùng
-`config.toml`, `project_rules.toml` và `Giao phiếu.xlsx`. Máy đích cần cài Google Chrome, sau đó chạy
+  `config.toml`, `project_rules.toml` và `Giao phiếu_demo2.xlsx`. Máy đích cần cài Google Chrome, sau đó chạy
 `ATS-OneBSS login` một lần để đăng nhập OneBSS và Google. Không sao chép
 `.browser-profile` vì phiên đăng nhập thuộc riêng từng máy/người dùng.

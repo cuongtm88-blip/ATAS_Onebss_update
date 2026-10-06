@@ -44,10 +44,54 @@ def plan_assignments(
     )
     excluded = {normalize(name) for name in excluded_names}
 
+    member_names_by_group: dict[str, set[str]] = {}
+    member_group_by_name: dict[str, str] = {}
+    for rule in rules:
+        for member in rule.members:
+            key = normalize(member.name)
+            prior_group = member_group_by_name.get(key)
+            if prior_group and prior_group != member.group:
+                raise RuleError(
+                    f"Nhân viên {member.name} xuất hiện ở nhiều nhóm: "
+                    f"{prior_group}, {member.group}"
+                )
+            member_group_by_name[key] = member.group
+            member_names_by_group.setdefault(member.group, set()).add(key)
     def adjusted_load(name: str) -> Decimal:
-        """Comparable group ratio; the common group average cancels out."""
+        """Monthly completion ratio versus the employee's fixed home group."""
         key = normalize(name)
+        group = member_group_by_name.get(key)
+        group_names = member_names_by_group.get(group or "", set())
+        average = (
+            sum((scores.get(person, Decimal(0)) for person in group_names), Decimal(0))
+            / len(group_names)
+            if group_names else Decimal(0)
+        )
+        denominator = average * target_ratios.get(key, Decimal(1))
+        if denominator > 0:
+            return scores.get(key, Decimal(0)) / denominator
         return scores.get(key, Decimal(0)) / target_ratios.get(key, Decimal(1))
+
+    def choose_member(
+        members: list[str], rule: ServiceRule,
+        pick_key: tuple[str, tuple[str, ...]],
+    ) -> str:
+        lowest = min(adjusted_load(name) for name in members)
+        tied = [name for name in members if adjusted_load(name) == lowest]
+        if any(member.target_share is not None for member in rule.members):
+            shares = {
+                normalize(member.name): member.target_share or Decimal(0)
+                for member in rule.members
+            }
+            largest_share = max(shares.get(normalize(name), Decimal(0)) for name in tied)
+            tied = [
+                name for name in tied
+                if shares.get(normalize(name), Decimal(0)) == largest_share
+            ]
+        cursor = last_pick.get(pick_key, -1) + 1
+        selected = tied[cursor % len(tied)]
+        last_pick[pick_key] = cursor
+        return selected
 
     completed = completed_keys or set()
     result: list[Assignment] = []
@@ -241,31 +285,25 @@ def plan_assignments(
                     # Project routes remain fixed and are never reassigned by
                     # this fallback. Keep the durable local pin unchanged so
                     # the original owner resumes the cohort after returning.
-                    lowest = min(adjusted_load(name) for name in eligible)
-                    tied = [name for name in eligible if adjusted_load(name) == lowest]
                     pick_key = ("cohort", tuple(normalize(name) for name in eligible))
-                    index = last_pick.get(pick_key, -1) + 1
-                    selected = tied[index % len(tied)]
-                    last_pick[pick_key] = eligible.index(selected)
+                    selected = choose_member(eligible, rule, pick_key)
                     cohort_pins[cohort_key] = selected
             else:
-                lowest = min(adjusted_load(name) for name in eligible)
-                tied = [name for name in eligible if adjusted_load(name) == lowest]
                 pick_key = ("cohort", tuple(normalize(name) for name in eligible))
-                index = last_pick.get(pick_key, -1) + 1
-                selected = tied[index % len(tied)]
-                last_pick[pick_key] = eligible.index(selected)
+                selected = choose_member(eligible, rule, pick_key)
                 cohort_pins[cohort_key] = selected
             assignees.append(selected)
         else:
-            for group, members in groups.items():
-                lowest = min(adjusted_load(name) for name in members)
-                tied = [name for name in members if adjusted_load(name) == lowest]
-                pick_key = (group, tuple(normalize(name) for name in members))
-                index = last_pick.get(pick_key, -1) + 1
-                assignee = tied[index % len(tied)]
-                last_pick[pick_key] = members.index(assignee)
-                assignees.append(assignee)
+            if any(member.target_share is not None for member in rule.members):
+                candidates = list(dict.fromkeys(
+                    name for members in groups.values() for name in members
+                ))
+                pick_key = ("weighted", tuple(normalize(name) for name in candidates))
+                assignees.append(choose_member(candidates, rule, pick_key))
+            else:
+                for group, members in groups.items():
+                    pick_key = (group, tuple(normalize(name) for name in members))
+                    assignees.append(choose_member(members, rule, pick_key))
         assignment = Assignment(
             ticket, tuple(assignees),
             rule.points if rule.count_points else Decimal(0), rule.row_number,

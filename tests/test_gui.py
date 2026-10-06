@@ -108,9 +108,9 @@ def test_prepare_runtime_root_refreshes_newer_editable_rules(monkeypatch, tmp_pa
     for relative in gui.RESOURCE_FILES:
         (resources / relative).write_text("bundled", encoding="utf-8")
     runtime.mkdir()
-    runtime_rules = runtime / "Giao phiếu.xlsx"
+    runtime_rules = runtime / "Giao phiếu_demo2.xlsx"
     runtime_rules.write_text("old runtime", encoding="utf-8")
-    editable_rules = project / "Giao phiếu.xlsx"
+    editable_rules = project / "Giao phiếu_demo2.xlsx"
     editable_rules.parent.mkdir(parents=True, exist_ok=True)
     editable_rules.write_text("new editable", encoding="utf-8")
     os.utime(runtime_rules, (1, 1))
@@ -134,6 +134,16 @@ def test_install_rules_file_validates_replaces_and_keeps_backup(tmp_path):
     assert backup is not None
     assert backup.read_text(encoding="utf-8") == "previous rules"
     assert gui.load_rules(target)
+
+
+def test_install_rules_file_accepts_group_percentage_workbook(tmp_path):
+    source = gui.resource_root() / "Giao phiếu_demo2.xlsx"
+    target = tmp_path / "Giao phiếu_demo2.xlsx"
+
+    backup = gui.install_rules_file(source, target)
+
+    assert backup is None
+    assert len(gui.load_rules(target)) == 60
 
 
 def test_install_rules_file_rejects_non_excel_file(tmp_path):

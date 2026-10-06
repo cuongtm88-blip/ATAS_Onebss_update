@@ -3,11 +3,11 @@ Set-Location (Join-Path $PSScriptRoot "..")
 
 $ruleWorkbook = Get-ChildItem -LiteralPath . -File -Filter "*.xlsx" |
   Where-Object {
-    $_.Name.Normalize([Text.NormalizationForm]::FormC) -eq "Giao phiếu.xlsx"
+    $_.Name.Normalize([Text.NormalizationForm]::FormC) -eq "Giao phiếu_demo2.xlsx"
   } |
   Select-Object -First 1
 if (-not $ruleWorkbook) {
-  throw "Không tìm thấy file Giao phiếu.xlsx trong thư mục dự án."
+  throw "Không tìm thấy file Giao phiếu_demo2.xlsx trong thư mục dự án."
 }
 
 uv sync --extra packaging

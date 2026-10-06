@@ -8,7 +8,7 @@ batch_size = 20
 timeout_ms = 30000
 
 [rules]
-file = "Giao phiếu.xlsx"
+file = "Giao phiếu_demo2.xlsx"
 projects_file = "project_rules.toml"
 # Chính và Phụ đều là nhân sự hợp lệ; không áp dụng quota theo vai trò.
 use_backup_members = true
@@ -20,7 +20,6 @@ use_backup_members = true
 "Nguyễn Hoàng Dương" = 1.10
 "Đoàn Hải Hà" = 1.05
 "Nguyễn Duy Thành" = 1.05
-"Ngọc Thành Kiên" = 1.05
 
 [google_sheet]
 url = "https://docs.google.com/spreadsheets/d/1giulYOsX2gjqmgrLqk9fyiOePNhMe-lJ6IIm8cBDBZI/edit?usp=sharing"

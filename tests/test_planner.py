@@ -361,6 +361,50 @@ def test_member_target_ratio_allows_configured_person_more_points():
     assert result[0].assignees == ("Người 110",)
 
 
+def test_percentage_rule_assigns_one_person_across_both_groups_by_month_ratio():
+    weighted = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (
+            Member("Ứng viên nhóm 1", "Nhóm 1", "Chính", Decimal("0.9")),
+            Member("Ứng viên nhóm 2", "Nhóm 2", "Chính", Decimal("0.1")),
+        ),
+    )
+    cohort_members = ServiceRule(
+        4, "Khác", Decimal("17"), "",
+        (
+            Member("Ứng viên nhóm 1", "Nhóm 1", "Chính"),
+            Member("Đồng đội nhóm 1", "Nhóm 1", "Chính"),
+            Member("Ứng viên nhóm 2", "Nhóm 2", "Chính"),
+            Member("Đồng đội nhóm 2", "Nhóm 2", "Chính"),
+        ),
+    )
+    result = plan_assignments(
+        [Ticket("GD1", "TB1", "Fiber")],
+        [weighted, cohort_members],
+        initial_scores={
+            "Ứng viên nhóm 1": Decimal("150"),
+            "Đồng đội nhóm 1": Decimal("50"),
+            "Ứng viên nhóm 2": Decimal("80"),
+            "Đồng đội nhóm 2": Decimal("120"),
+        },
+    )
+
+    assert result[0].assignees == ("Ứng viên nhóm 2",)
+
+
+def test_percentage_rule_uses_share_only_to_break_equal_month_ratio():
+    rule = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (
+            Member("Tỷ trọng cao", "Nhóm 1", "Chính", Decimal("0.7")),
+            Member("Tỷ trọng thấp", "Nhóm 2", "Chính", Decimal("0.3")),
+        ),
+    )
+    result = plan_assignments([Ticket("GD1", "TB1", "Fiber")], [rule])
+
+    assert result[0].assignees == ("Tỷ trọng cao",)
+
+
 def test_lower_adjusted_load_wins_across_primary_and_backup_roles():
     rule = ServiceRule(
         3, "Fiber", Decimal("17"), "",

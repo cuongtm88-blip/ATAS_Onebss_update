@@ -9,6 +9,7 @@ class Member:
     name: str
     group: str
     role: str
+    target_share: Decimal | None = None
 
 
 @dataclass(frozen=True)

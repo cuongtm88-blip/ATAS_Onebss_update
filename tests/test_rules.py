@@ -202,7 +202,7 @@ def test_voice_brandname_unknown_vip_is_rejected():
 def test_score_member_names_exclude_no_score_dispatcher():
     rules_file = Path(__file__).parents[1] / "Giao phiếu.xlsx"
     names = load_score_member_names(rules_file)
-    assert len(names) == 18
+    assert len(names) == 17
     assert names[0] == "Lương Tuấn Thanh"
     assert not any("Cường" in name or "Cường" in name for name in names)
 
@@ -211,10 +211,10 @@ def test_current_workbook_has_requested_fourteen_and_four_member_groups():
     root = Path(__file__).parents[1]
     rules_file = root / "Giao phiếu.xlsx"
     rules = load_rules(rules_file)
-    names = load_score_member_names(rules_file)
+    all_members = {member.name for rule in rules for member in rule.members}
     grouped = {
-        group: {name for name in names if member_group(rules, name) == group}
-        for group in {member_group(rules, name) for name in names}
+        group: {name for name in all_members if member_group(rules, name) == group}
+        for group in {member_group(rules, name) for name in all_members}
     }
     group_1 = next(values for key, values in grouped.items() if "1" in key)
     group_2 = next(values for key, values in grouped.items() if "2" in key)
@@ -222,7 +222,7 @@ def test_current_workbook_has_requested_fourteen_and_four_member_groups():
         "Lương Tuấn Thanh", "Lý Thị Bích Hằng", "Tạ Lê Hoa", "Lê Anh Tuấn",
         "Vũ Thế Ninh", "Đặng Văn Minh", "Đào Anh Vũ", "Đoàn Hải Hà",
         "Nguyễn Duy Thành", "Ngô Thị Minh Phương", "Lê Đức Vinh",
-        "Ngọc Thành Kiên", "Nguyễn Hoàng Dương", "Trần Thị Thu Hằng",
+        "Trâ\u0300n Ma\u0323nh Cươ\u0300ng", "Nguyễn Hoàng Dương", "Trần Thị Thu Hằng",
     }
     assert group_2 == {
         "Lê Đức Tuấn", "Đỗ Thị Thu Trang", "Ngô Thùy Trang",
@@ -238,8 +238,73 @@ def test_current_config_has_requested_member_target_ratios():
         "Nguyễn Hoàng Dương": Decimal("1.10"),
         "Đoàn Hải Hà": Decimal("1.05"),
         "Nguyễn Duy Thành": Decimal("1.05"),
-        "Ngọc Thành Kiên": Decimal("1.05"),
     }
+
+
+def test_demo2_percentage_workbook_expands_service_map_and_preserves_api_flags():
+    workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
+    rules = load_rules(workbook)
+
+    assert len(rules) == 60
+    sip = match_rule(rules, Ticket("GD1", "TB1", "ISDN 30B+D cáp đồng"))
+    assert sip.sheet_service == "SIP"
+    assert {member.name: member.target_share for member in sip.members} == {
+        "Nguyễn Hoàng Dương": Decimal("0.3"),
+        "Lê Đức Tuấn": Decimal("0.7"),
+    }
+    fiber = match_rule(rules, Ticket("GD2", "TB2", "Mega"))
+    assert fiber.sheet_service == "Fiber"
+    assert fiber.send_to_api is True
+
+
+def test_demo2_service_map_uses_channel_and_installation_conditions():
+    workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
+    rules = load_rules(workbook)
+
+    local = match_rule(rules, Ticket("GD1", "TB1", "MegaWan", channel_type="Nội tỉnh"))
+    interprovincial = match_rule(
+        rules, Ticket("GD2", "TB2", "MegaWan", channel_type="Liên tỉnh")
+    )
+    assert local.sheet_service == "Megawan NT"
+    assert local.points == Decimal("17")
+    assert interprovincial.sheet_service == "Megawan LT"
+    assert interprovincial.points == Decimal("27")
+
+    domain = match_rule(
+        rules,
+        Ticket("GD3", "TB3", "Tên miền Việt Nam", installation_type="Thanh lý DV CNTT"),
+    )
+    assert domain.sheet_service == "Tên Miền Việt Nam (Triển khai)"
+    assert domain.points == Decimal("14")
+
+    voice_xu_ly = match_rule(
+        rules, Ticket("GD4", "TB4", "Voice Brandname", vip_status="Xu ly")
+    )
+    voice_giam_sat = match_rule(
+        rules, Ticket("GD5", "TB5", "Voice Brandname", vip_status="Giam sat")
+    )
+    assert {member.name for member in voice_xu_ly.members} == {
+        "Đỗ Thị Thu Trang", "Ngô Thùy Trang", "Nguyễn Thị Thu Trang",
+    }
+    assert [member.name for member in voice_giam_sat.members] == ["Lê Đức Tuấn"]
+
+
+def test_demo2_percentage_rows_sum_to_100_and_keep_fixed_group_roster():
+    workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
+    rules = load_rules(workbook)
+    names = load_score_member_names(workbook)
+    group_members = {
+        group: {
+            member.name
+            for rule in rules for member in rule.members
+            if member.group == group
+        }
+        for group in {member.group for rule in rules for member in rule.members}
+    }
+
+    assert len(group_members["Nhóm 1"]) == 14
+    assert len(group_members["Nhóm 2"]) == 4
+    assert len(names) == 17  # Trần Mạnh Cường is a non-scoring dispatcher.
 
 
 def test_canonical_member_name_accepts_unique_vietnamese_tone_typo():
@@ -350,6 +415,31 @@ def test_bca_routes_by_labor_address(address, assignee):
     match = match_project_rule([rule], ticket)
     assert match is not None
     assert match.project_name == "Dự án BCA"
+    assert match.assignee == assignee
+
+
+@pytest.mark.parametrize(
+    ("address", "assignee"),
+    [
+        ("Thành phố Hải Phòng", "Vũ Thế Ninh"),
+        ("Tỉnh Hà Nội", "Đào Anh Vũ"),
+        ("Tỉnh Phú Thọ", "Đoàn Hải Hà"),
+        ("Tỉnh Nghệ An", "Nguyễn Duy Thành"),
+    ],
+)
+def test_bhxh_project_uses_bca_routing(address, assignee):
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    ticket = Ticket(
+        "GD-BHXH", "TB-BHXH", "Fiber",
+        customer_name="Ban Quản Lý Đầu Tư Và Xây Dựng Ngành Bảo Hiểm Xã Hội",
+        labor_address=address,
+    )
+
+    match = match_project_rule(rules, ticket)
+
+    assert match is not None
+    assert match.project_name == "Dự án BHXH"
     assert match.assignee == assignee
 
 
@@ -547,6 +637,22 @@ def test_project_falls_back_to_labor_province():
         labor_province="Tp Hải Phòng",
     )
     match = match_project_rule(rules, ticket)
+    assert match is not None
+    assert match.project_name == "Dự án BTC"
+    assert match.assignee == "Vũ Thế Ninh"
+
+
+def test_kho_bac_nha_nuoc_uses_btc_project_routes():
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    ticket = Ticket(
+        "VNP-TD/00098169", "MW000020934", "Megawan",
+        customer_name="Kho Bạc Nhà Nước tỉnh Hải Phòng",
+        labor_address="Trụ sở Kho Bạc Nhà Nước, Thành phố Hải Phòng",
+    )
+
+    match = match_project_rule(rules, ticket)
+
     assert match is not None
     assert match.project_name == "Dự án BTC"
     assert match.assignee == "Vũ Thế Ninh"

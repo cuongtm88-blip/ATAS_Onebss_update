@@ -537,6 +537,23 @@ def test_btc_project_accepts_tong_cuc_thue_customer_alias():
     assert match.assignee == "Đào Anh Vũ"
 
 
+def test_btc_tong_cuc_thue_in_subscriber_name_routes_by_labor_province():
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    ticket = Ticket(
+        "VNP-TL/00068847", "MW000021891", "Megawan LT",
+        subscriber_name="Tổng Cục Thuế",
+        labor_address="Chi cục Thuế Như Xuân",
+        labor_province="Tỉnh Thanh Hóa",
+    )
+
+    match = match_project_rule(rules, ticket)
+
+    assert match is not None
+    assert match.project_name == "Dự án BTC"
+    assert match.assignee == "Nguyễn Duy Thành"
+
+
 def test_btc_project_accepts_customs_it_statistics_customer_alias():
     project_file = Path(__file__).parents[1] / "project_rules.toml"
     rules = load_project_rules(project_file)

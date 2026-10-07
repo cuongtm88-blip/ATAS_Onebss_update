@@ -1,5 +1,9 @@
 # ATS OneBSS
 
+Phiên bản 0.9.36 sửa nhận diện Dự án BTC khi tên đơn vị chỉ có trong `Tên thuê bao`
+do ATS chưa đọc được `Tên KH` ở một lượt tải. Phiếu vẫn được định tuyến theo tỉnh
+của dự án thay vì rơi xuống quy tắc cân bằng dịch vụ thông thường.
+
 Phiên bản 0.9.35 sửa cập nhật tự động trên macOS: bộ giải nén nay khôi phục
 symlink nội bộ cần thiết cho PySide/Qt/Python, giữ quyền thực thi và từ chối
 symlink thoát khỏi gói hoặc cấu trúc đường dẫn không an toàn.

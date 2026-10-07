@@ -28,6 +28,9 @@ PLIST="dist/${APP_NAME}.app/Contents/Info.plist"
 if ! /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION}" "$PLIST" 2>/dev/null; then
   /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${VERSION}" "$PLIST"
 fi
+# Downloaded source workbooks can carry quarantine metadata into the app bundle.
+# Remove it from this freshly built app before creating its ad-hoc signature.
+xattr -dr com.apple.quarantine "dist/${APP_NAME}.app" 2>/dev/null || true
 codesign --force --deep --sign - "dist/${APP_NAME}.app"
 
 echo "Đã tạo ứng dụng macOS tại dist/${APP_NAME}.app"

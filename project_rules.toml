@@ -138,7 +138,10 @@ subscriber_prefixes = ["bgt2"]
 [[projects]]
 name = "Dự án BTC"
 priority = 90
-match_fields = ["customer_name"]
+# OneBSS can expose the project customer in either the Tên KH detail or
+# the Tên thuê bao grid field. Match both so incomplete detail reads cannot
+# send a known BTC ticket through ordinary service balancing.
+match_fields = ["customer_name", "subscriber_name"]
 contains = [
   "Tổng Cục Dự Trữ Nhà Nước",
   "Cục Công Nghệ Thông Tin & Thống Kê Hải Quan",
@@ -176,7 +179,7 @@ locations = [
 [[projects]]
 name = "Dự án BTC"
 priority = 90
-match_fields = ["customer_name"]
+match_fields = ["customer_name", "subscriber_name"]
 contains = "Tổng Cục Thuế"
 route_field = "labor_address"
 

@@ -88,6 +88,7 @@ class Assignment:
     write_to_sheet: bool = True
     cohort_key: str = ""
     send_to_api: bool = True
+    manual_override: bool = False
 
     @property
     def points_per_person(self) -> Decimal:

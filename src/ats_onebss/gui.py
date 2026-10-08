@@ -70,6 +70,7 @@ from .credentials import (
     save_credentials,
     save_ingest_api_token,
 )
+from .ledger import Ledger
 from .regions import Region, RegionCatalog, RegionError, load_regions
 from .rules import load_project_rules, load_rules
 from .telegram import (
@@ -338,6 +339,7 @@ class ATSOneBSSWindow(QMainWindow):
         self.log_path = user_data_root() / "logs" / "ats-onebss.log"
         self.skipped_csv_path: Path | None = None
         self.skipped_csv_stamp: tuple[int, int] | None = None
+        self.database_path: Path | None = None
         self.telegram_signals = TelegramSignals(self)
         self.update_signals = UpdateSignals(self)
         self._update_busy = False
@@ -572,6 +574,20 @@ class ATSOneBSSWindow(QMainWindow):
         skipped_tools.addWidget(self.refresh_skipped_button)
         skipped_tools.addWidget(self.open_skipped_button)
         skipped_layout.addLayout(skipped_tools)
+        override_tools = QHBoxLayout()
+        override_tools.addWidget(QLabel("Chỉ định người nhận cho phiếu đang chọn:"))
+        self.skipped_assignee_combo = QComboBox()
+        self.skipped_assignee_combo.setMinimumWidth(190)
+        self.skipped_assignee_combo.setToolTip(
+            "Chọn nhân sự nhận riêng cho phiếu đang chọn, không phụ thuộc nhóm quy tắc"
+        )
+        self.assign_skipped_button = QPushButton("Chỉ định người nhận")
+        self.cancel_skipped_override_button = QPushButton("Hủy chỉ định")
+        override_tools.addWidget(self.skipped_assignee_combo)
+        override_tools.addWidget(self.assign_skipped_button)
+        override_tools.addWidget(self.cancel_skipped_override_button)
+        override_tools.addStretch(1)
+        skipped_layout.addLayout(override_tools)
         self.skipped_table = QTableWidget()
         self.skipped_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.skipped_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -709,6 +725,10 @@ class ATSOneBSSWindow(QMainWindow):
         )
         self.open_skipped_button.clicked.connect(self._open_skipped_csv)
         self.skipped_table.itemSelectionChanged.connect(self._show_skipped_detail)
+        self.assign_skipped_button.clicked.connect(self._assign_selected_skipped)
+        self.cancel_skipped_override_button.clicked.connect(
+            self._cancel_selected_skipped_override
+        )
         self.save_telegram_button.clicked.connect(self._save_telegram_settings)
         self.test_telegram_button.clicked.connect(self._test_telegram)
         self.save_onebss_credentials_button.clicked.connect(
@@ -798,12 +818,14 @@ class ATSOneBSSWindow(QMainWindow):
         self.member_names = ()
         self.skipped_csv_path = None
         self.skipped_csv_stamp = None
+        self.database_path = None
         default_interval = 15
         if region.enabled:
             try:
                 self.member_names = region_member_names(region)
                 config = load_config(region.config_path)
                 default_interval = config.poll_interval_minutes
+                self.database_path = config.database
                 self.skipped_csv_path = config.preview_csv.with_name(
                     "preview_skipped.csv"
                 )
@@ -832,6 +854,8 @@ class ATSOneBSSWindow(QMainWindow):
         self._load_onebss_credentials(region)
         self._load_ingest_settings(region)
         self._refresh_skipped_csv(force=True)
+        self.skipped_assignee_combo.clear()
+        self.skipped_assignee_combo.addItems(self.member_names)
         self.settings["last_region"] = region.key
         self._set_process_controls(False)
 
@@ -1291,15 +1315,25 @@ class ATSOneBSSWindow(QMainWindow):
             return
         self.skipped_table.setSortingEnabled(False)
         self.skipped_table.clear()
-        self.skipped_table.setColumnCount(len(headers))
+        overrides = (
+            Ledger(self.database_path, initialize=False).manual_overrides()
+            if self.database_path else {}
+        )
+        display_headers = [*headers, "Chỉ định riêng"]
+        self.skipped_table.setColumnCount(len(display_headers))
         self.skipped_table.setRowCount(len(rows))
-        if headers:
-            self.skipped_table.setHorizontalHeaderLabels(headers)
+        self.skipped_table.setHorizontalHeaderLabels(display_headers)
         for row_index, row in enumerate(rows):
             for column_index, value in enumerate(row[: len(headers)]):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
                 self.skipped_table.setItem(row_index, column_index, item)
+            transaction_id = row[0] if row else ""
+            subscriber_id = row[1] if len(row) > 1 else ""
+            assignee = overrides.get(f"{transaction_id}|{subscriber_id}", "")
+            self.skipped_table.setItem(
+                row_index, len(headers), QTableWidgetItem(assignee)
+            )
         header = self.skipped_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
         for column in range(min(4, len(headers))):
@@ -1316,6 +1350,72 @@ class ATSOneBSSWindow(QMainWindow):
             self.skipped_table.selectRow(0)
         else:
             self.skipped_detail_text.clear()
+
+    def _selected_skipped_ticket(self) -> tuple[str, str] | None:
+        row = self.skipped_table.currentRow()
+        if row < 0:
+            return None
+        values: dict[str, str] = {}
+        for column in range(self.skipped_table.columnCount()):
+            header = self.skipped_table.horizontalHeaderItem(column)
+            item = self.skipped_table.item(row, column)
+            if header and item:
+                values[header.text()] = item.text().strip()
+        transaction_id = values.get("Mã giao dịch", "")
+        subscriber_id = values.get("Mã thuê bao", "")
+        if not transaction_id:
+            QMessageBox.warning(
+                self, "Thiếu thông tin phiếu",
+                "Phiếu cần có Mã giao dịch để chỉ định an toàn.",
+            )
+            return None
+        return transaction_id, subscriber_id
+
+    def _assign_selected_skipped(self) -> None:
+        if not self.database_path:
+            return
+        ticket = self._selected_skipped_ticket()
+        assignee = self.skipped_assignee_combo.currentText().strip()
+        if not ticket or not assignee:
+            return
+        answer = QMessageBox.question(
+            self, "Xác nhận chỉ định người nhận",
+            f"Chỉ định phiếu {ticket[0]} / {ticket[1]} cho {assignee}?\n\n"
+            "Phiếu sẽ được ưu tiên giao cho nhân sự này ở lượt xử lý tiếp theo, "
+            "kể cả khi trái với quy tắc phân nhóm.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            Ledger(self.database_path, initialize=False).set_manual_override(
+                ticket[0], ticket[1], assignee
+            )
+        except Exception as error:
+            QMessageBox.warning(self, "Không lưu được chỉ định", str(error))
+            return
+        self._append_log(
+            f"Đã chỉ định riêng phiếu {ticket[0]} / {ticket[1]} cho {assignee}; "
+            "sẽ áp dụng ở lượt xử lý tiếp theo."
+        )
+        self._refresh_skipped_csv(force=True)
+
+    def _cancel_selected_skipped_override(self) -> None:
+        if not self.database_path:
+            return
+        ticket = self._selected_skipped_ticket()
+        if not ticket:
+            return
+        try:
+            Ledger(self.database_path, initialize=False).remove_manual_override(
+                ticket[0], ticket[1]
+            )
+        except Exception as error:
+            QMessageBox.warning(self, "Không hủy được chỉ định", str(error))
+            return
+        self._append_log(f"Đã hủy chỉ định riêng cho phiếu {ticket[0]} / {ticket[1]}.")
+        self._refresh_skipped_csv(force=True)
 
     def _show_skipped_detail(self) -> None:
         """Show every field of the selected skipped ticket without truncation."""

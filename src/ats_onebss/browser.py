@@ -1471,18 +1471,21 @@ class OneBSSClient:
                     # legitimately contain a completely different value.
                     details_match = await _row_matches_ticket(row, ticket)
                     if details_match:
-                        # OneBSS updates Địa chỉ LĐ and Tên KH independently.
-                        # In production Tên KH can lag the selected grid row by
-                        # more than two seconds, so reading immediately can mix
-                        # the customer from the previous ticket with the new
-                        # address and route the ticket to the wrong project.
-                        await self.page.wait_for_timeout(2_500)
                         break
                     await asyncio.sleep(0.05)
+                customer_name = ""
+                if details_match:
+                    # OneBSS populates the detail form asynchronously after
+                    # selection. Poll the actual Tên KH field instead of
+                    # assuming one fixed delay is sufficient.
+                    customer_deadline = asyncio.get_running_loop().time() + 6
+                    while asyncio.get_running_loop().time() < customer_deadline:
+                        customer_name = await self._detail_value("Tên KH")
+                        if customer_name:
+                            break
+                        await self.page.wait_for_timeout(300)
                 # Never copy values left over from a previously selected row.
-                customer_name = (
-                    await self._detail_value("Tên KH") if details_match else ""
-                ) or ticket.customer_name
+                customer_name = customer_name or ticket.customer_name
                 subscriber_name = (
                     await self._detail_value("Tên TB") if details_match else ""
                 ) or ticket.subscriber_name

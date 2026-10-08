@@ -1,5 +1,10 @@
 # ATS OneBSS
 
+Phiên bản 0.9.37 lưu tuyến dự án của phiếu đang chờ để không mất nhận diện
+khi dừng/chạy lại; nếu không đọc được `Tên KH`, app giữ phiếu chưa giao thay vì
+áp dụng nhầm quy tắc dịch vụ. Tab `Phiếu chưa giao` hỗ trợ chỉ định nhân sự riêng
+cho từng phiếu; chỉ định được lưu qua lần khởi động và chỉ áp dụng cho phiếu đó.
+
 Phiên bản 0.9.36 sửa nhận diện Dự án BTC khi tên đơn vị chỉ có trong `Tên thuê bao`
 do ATS chưa đọc được `Tên KH` ở một lượt tải. Phiếu vẫn được định tuyến theo tỉnh
 của dự án thay vì rơi xuống quy tắc cân bằng dịch vụ thông thường.

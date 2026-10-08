@@ -312,7 +312,7 @@ def test_detail_enrichment_validates_sale_subscriber_not_construction_code():
     assert enriched[0].labor_address == "Thị xã Sơn Tây, Hà Nội, Việt Nam"
     assert enriched[0].connection_address == ""
     client._technical_value.assert_not_awaited()
-    client.page.wait_for_timeout.assert_awaited_with(2_500)
+    client.page.wait_for_timeout.assert_not_awaited()
 
 
 def test_detail_enrichment_verifies_note_qualified_project_from_form():

@@ -204,3 +204,25 @@ def test_dashboard_outbox_and_reassignment_transfer_points(tmp_path):
     assert record is not None
     assert record["current_assignee"] == "Người B"
     assert ledger.scores() == {"Người B": Decimal("17")}
+
+
+def test_manual_override_and_project_route_survive_restart_until_assigned(tmp_path):
+    path = tmp_path / "ledger.db"
+    ledger = Ledger(path)
+    ticket = Ticket(
+        "GD1", "TB1", "Fiber", customer_name="Dự án X",
+        labor_address="Tuyên Quang", labor_province="Tuyên Quang",
+    )
+    ledger.remember_pending_project(ticket, "Dự án X", "Nguyễn Duy Thành")
+    ledger.set_manual_override("GD1", "TB1", "Lê Đức Vinh")
+
+    restarted = Ledger(path)
+    assert restarted.pending_project_routes()[ticket.key]["assignee"] == "Nguyễn Duy Thành"
+    assert restarted.manual_overrides()[ticket.key] == "Lê Đức Vinh"
+
+    assignment = restarted.stage(
+        Assignment(ticket, ("Lê Đức Vinh",), Decimal("17"), 3, manual_override=True)
+    )
+    restarted.mark(assignment, "onebss_saved")
+    assert restarted.manual_overrides() == {}
+    assert restarted.pending_project_routes() == {}

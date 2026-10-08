@@ -75,6 +75,29 @@ def test_project_rule_overrides_service_members_and_is_recorded():
     assert result[0].project_name == "Đài THVN"
 
 
+def test_manual_assignee_overrides_project_rules_and_leave_exclusion_for_one_ticket():
+    rule = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (Member("Nguyễn Duy Thành", "Nhóm 1", "Chính"),
+         Member("Lê Đức Vinh", "Nhóm 1", "Chính")),
+    )
+    project = ProjectRule(
+        name="Dự án X", contains="Dự án X", match_fields=("customer_name",),
+        priority=90, fixed_assignee="Nguyễn Duy Thành",
+    )
+    ticket = Ticket("GD1", "TB1", "Fiber", customer_name="Dự án X")
+
+    result = plan_assignments(
+        [ticket], [rule], project_rules=[project],
+        excluded_members=("Nguyễn Duy Thành",),
+        manual_assignees={ticket.key: "Lê Đức Vinh"},
+    )
+
+    assert result[0].assignees == ("Lê Đức Vinh",)
+    assert result[0].project_name == "Dự án X"
+    assert result[0].manual_override is True
+
+
 def test_excluded_member_is_removed_from_normal_balancing():
     rule = ServiceRule(
         3, "Fiber", Decimal("17"), "",

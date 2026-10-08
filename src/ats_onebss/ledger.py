@@ -7,14 +7,15 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from .models import Assignment
+from .models import Assignment, Ticket
 from .text import assignment_cohort_key, normalize
 
 
 class Ledger:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, initialize: bool = True):
         self.path = Path(path)
-        self._initialize()
+        if initialize:
+            self._initialize()
 
     @contextmanager
     def connect(self):
@@ -43,6 +44,25 @@ class Ledger:
                     sms_clicked INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     PRIMARY KEY (ticket_key, assignee)
+                );
+                CREATE TABLE IF NOT EXISTS pending_ticket_routes (
+                    ticket_key TEXT PRIMARY KEY,
+                    transaction_id TEXT NOT NULL,
+                    subscriber_id TEXT NOT NULL,
+                    project_name TEXT NOT NULL,
+                    assignee TEXT NOT NULL,
+                    customer_name TEXT NOT NULL DEFAULT '',
+                    subscriber_name TEXT NOT NULL DEFAULT '',
+                    labor_address TEXT NOT NULL DEFAULT '',
+                    labor_province TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS manual_ticket_overrides (
+                    ticket_key TEXT PRIMARY KEY,
+                    transaction_id TEXT NOT NULL,
+                    subscriber_id TEXT NOT NULL,
+                    assignee TEXT NOT NULL,
+                    created_at TEXT NOT NULL
                 );
                 """
             )
@@ -281,6 +301,112 @@ class Ledger:
             db.execute(
                 f"UPDATE assignments SET {field} = 1 WHERE ticket_key = ?",
                 (assignment.ledger_key or assignment.ticket.key,),
+            )
+            if field == "onebss_saved":
+                db.execute(
+                    "DELETE FROM pending_ticket_routes WHERE ticket_key = ?",
+                    (assignment.ticket.key,),
+                )
+                db.execute(
+                    "DELETE FROM manual_ticket_overrides WHERE ticket_key = ?",
+                    (assignment.ticket.key,),
+                )
+
+    def remember_pending_project(
+        self, ticket: Ticket, project_name: str, assignee: str
+    ) -> None:
+        """Persist project identity/routing while a project ticket is waiting."""
+        with self.connect() as db:
+            db.execute(
+                """INSERT INTO pending_ticket_routes
+                   (ticket_key, transaction_id, subscriber_id, project_name,
+                    assignee, customer_name, subscriber_name, labor_address,
+                    labor_province, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(ticket_key) DO UPDATE SET
+                     project_name=excluded.project_name,
+                     assignee=excluded.assignee,
+                     customer_name=excluded.customer_name,
+                     subscriber_name=excluded.subscriber_name,
+                     labor_address=excluded.labor_address,
+                     labor_province=excluded.labor_province,
+                     updated_at=excluded.updated_at""",
+                (
+                    ticket.key, ticket.transaction_id, ticket.subscriber_id,
+                    project_name, assignee, ticket.customer_name,
+                    ticket.subscriber_name, ticket.labor_address,
+                    ticket.labor_province,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+
+    def pending_project_routes(self) -> dict[str, dict[str, str]]:
+        with self.connect() as db:
+            rows = db.execute(
+                """SELECT ticket_key, transaction_id, subscriber_id, project_name,
+                          assignee, customer_name, subscriber_name, labor_address,
+                          labor_province
+                   FROM pending_ticket_routes"""
+            ).fetchall()
+        keys = (
+            "ticket_key", "transaction_id", "subscriber_id", "project_name",
+            "assignee", "customer_name", "subscriber_name", "labor_address",
+            "labor_province",
+        )
+        return {row[0]: dict(zip(keys, row, strict=True)) for row in rows}
+
+    def set_manual_override(
+        self, transaction_id: str, subscriber_id: str, assignee: str
+    ) -> None:
+        ticket_key = f"{transaction_id}|{subscriber_id}"
+        with self.connect() as db:
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS manual_ticket_overrides (
+                    ticket_key TEXT PRIMARY KEY,
+                    transaction_id TEXT NOT NULL,
+                    subscriber_id TEXT NOT NULL,
+                    assignee TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
+            )
+            db.execute(
+                """INSERT INTO manual_ticket_overrides
+                   (ticket_key, transaction_id, subscriber_id, assignee, created_at)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(ticket_key) DO UPDATE SET
+                     assignee=excluded.assignee, created_at=excluded.created_at""",
+                (
+                    ticket_key, transaction_id, subscriber_id, assignee,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+
+    def manual_overrides(self) -> dict[str, str]:
+        if not self.path.is_file():
+            return {}
+        with self.connect() as db:
+            try:
+                rows = db.execute(
+                    "SELECT ticket_key, assignee FROM manual_ticket_overrides"
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return {}
+        return dict(rows)
+
+    def remove_manual_override(self, transaction_id: str, subscriber_id: str) -> None:
+        with self.connect() as db:
+            db.execute(
+                """CREATE TABLE IF NOT EXISTS manual_ticket_overrides (
+                    ticket_key TEXT PRIMARY KEY,
+                    transaction_id TEXT NOT NULL,
+                    subscriber_id TEXT NOT NULL,
+                    assignee TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
+            )
+            db.execute(
+                "DELETE FROM manual_ticket_overrides WHERE ticket_key = ?",
+                (f"{transaction_id}|{subscriber_id}",),
             )
 
     def pending_sheet_rows(self) -> list[dict[str, str]]:

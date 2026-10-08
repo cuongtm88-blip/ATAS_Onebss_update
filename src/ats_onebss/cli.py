@@ -31,7 +31,7 @@ from .rules import (
     member_group,
     voice_brandname_mode,
 )
-from .text import normalize, ticket_identity
+from .text import normalize, ticket_identity, unaccent
 from .telegram import TelegramNotifier, wait_for_otp
 from .ingest import IngestApiClient
 
@@ -215,12 +215,69 @@ async def collect_plan(
     # removes it successfully, the next identical occurrence is handled in
     # this same automatic cycle.
     tickets = _unique_tickets(tickets)
+    pending_projects = ledger.pending_project_routes()
+    tickets = [
+        replace(
+            ticket,
+            customer_name=(
+                ticket.customer_name
+                or pending_projects.get(ticket.key, {}).get("customer_name", "")
+            ),
+            subscriber_name=(
+                ticket.subscriber_name
+                or pending_projects.get(ticket.key, {}).get("subscriber_name", "")
+            ),
+            labor_address=(
+                ticket.labor_address
+                or pending_projects.get(ticket.key, {}).get("labor_address", "")
+            ),
+            labor_province=(
+                ticket.labor_province
+                or pending_projects.get(ticket.key, {}).get("labor_province", "")
+            ),
+        )
+        for ticket in tickets
+    ]
     tickets = await client.enrich_ticket_details(tickets, project_rules)
     valid = []
     skipped: list[tuple[object, str]] = []
+    manual_assignees: dict[str, str] = {}
     sheet_assignees = sheet_assignees or {}
+    configured_names = {
+        normalize(member.name): member.name
+        for rule in rules for member in rule.members
+    }
+    for project in project_rules:
+        for name in (project.fixed_assignee, *(route.assignee for route in project.routes)):
+            if name:
+                configured_names.setdefault(normalize(name), name)
+    configured_unaccented: dict[str, list[str]] = {}
+    for name in configured_names.values():
+        configured_unaccented.setdefault(unaccent(name), []).append(name)
+    pending_overrides = ledger.manual_overrides()
+    customer_rules = any(
+        "customer_name" in project.match_fields for project in project_rules
+    )
     for ticket in tickets:
         try:
+            requested_assignee = pending_overrides.get(ticket.key)
+            if requested_assignee:
+                canonical_assignee = configured_names.get(normalize(requested_assignee))
+                if canonical_assignee is None:
+                    matches = configured_unaccented.get(unaccent(requested_assignee), [])
+                    canonical_assignee = matches[0] if len(matches) == 1 else None
+                if canonical_assignee is None:
+                    raise RuleError(
+                        f"Người được chỉ định ({requested_assignee}) không còn trong cấu hình nhân sự"
+                    )
+                manual_assignees[ticket.key] = canonical_assignee
+                valid.append(ticket)
+                continue
+            if customer_rules and not ticket.customer_name:
+                raise RuleError(
+                    "Không đọc được Tên KH để kiểm tra phiếu dự án; "
+                    "giữ phiếu chưa giao và sẽ thử đọc lại ở chu kỳ sau."
+                )
             prior_assignees = sheet_assignees.get(
                 ticket_identity(ticket.transaction_id, ticket.subscriber_id)
             )
@@ -275,6 +332,9 @@ async def collect_plan(
                     project = match_project_rule(project_rules, ticket)
                     if project:
                         if normalize(project.assignee) in excluded:
+                            ledger.remember_pending_project(
+                                ticket, project.project_name, project.assignee
+                            )
                             raise RuleError(
                                 f"{project.project_name}: người phụ trách "
                                 f"{project.assignee} đang nghỉ phép"
@@ -303,6 +363,7 @@ async def collect_plan(
         excluded_members,
         ledger.cohort_assignees(),
         cohort_conflicts,
+        manual_assignees,
     )
     for ticket in valid:
         pinned = cohort_conflicts.get(ticket.key)
@@ -499,6 +560,22 @@ async def process_available(
         batch = [
             item for item in assignments if item.assignees == assignees
         ][:config.batch_size]
+        current_overrides = ledger.manual_overrides()
+        if any(
+            (item.manual_override and item.ticket.key not in current_overrides)
+            or (
+                item.ticket.key in current_overrides
+                and (
+                    not item.manual_override
+                    or len(item.assignees) != 1
+                    or normalize(item.assignees[0])
+                    != normalize(current_overrides[item.ticket.key])
+                )
+            )
+            for item in batch
+        ):
+            print("Danh sách chỉ định riêng vừa thay đổi; đang lập lại kế hoạch trước khi giao.")
+            continue
         before_counts = {
             item.ticket.key: visible_counts.get(item.ticket.key, 0)
             for item in batch

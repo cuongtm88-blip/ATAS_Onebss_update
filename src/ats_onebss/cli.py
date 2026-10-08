@@ -319,7 +319,7 @@ async def collect_plan(
                                     f"Người nhận theo Google Sheet ({canonical}) "
                                     "đang nghỉ phép"
                                 )
-                            member_group(rules, canonical)
+                            member_group(rules, canonical, rule)
             else:
                 rule = match_rule(rules, ticket)
                 voice_mode = voice_brandname_mode(rule, ticket)
@@ -339,7 +339,7 @@ async def collect_plan(
                                 f"{project.project_name}: người phụ trách "
                                 f"{project.assignee} đang nghỉ phép"
                             )
-                        member_group(rules, project.assignee)
+                        member_group(rules, project.assignee, rule)
                     else:
                         eligible_members(
                             rule, ticket, config.use_backup_members,

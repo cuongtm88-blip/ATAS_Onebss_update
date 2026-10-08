@@ -2,7 +2,43 @@ from decimal import Decimal
 
 from ats_onebss.models import Member, ProjectRule, ServiceRule, Ticket
 from ats_onebss.planner import plan_assignments
+from ats_onebss.rules import member_score_key
 from ats_onebss.text import assignment_cohort_key
+
+
+def test_dual_group_employee_is_balanced_against_current_service_group():
+    group_1 = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (
+            Member("Lê Đức Tuấn", "Nhóm 1", "Chính"),
+            Member("An", "Nhóm 1", "Chính"),
+        ),
+    )
+    group_2 = ServiceRule(
+        4, "SMS Brandname", Decimal("20"), "",
+        (
+            Member("Lê Đức Tuấn", "Nhóm 2", "Chính"),
+            Member("Bình", "Nhóm 2", "Chính"),
+        ),
+    )
+    scores = {
+        member_score_key("Nhóm 1", "Lê Đức Tuấn"): Decimal("100"),
+        "An": Decimal("0"),
+        member_score_key("Nhóm 2", "Lê Đức Tuấn"): Decimal("0"),
+        "Bình": Decimal("100"),
+    }
+    result = plan_assignments(
+        [
+            Ticket("GD1", "TB1", "Fiber", "Fiber"),
+            Ticket("GD2", "TB2", "SMS Brandname", "SMS Brandname"),
+        ],
+        [group_1, group_2],
+        initial_scores=scores,
+    )
+
+    assigned = {item.ticket.service: item.assignees for item in result}
+    assert assigned["Fiber"] == ("An",)
+    assert assigned["SMS Brandname"] == ("Lê Đức Tuấn",)
 
 
 def test_balances_points_and_splits_between_groups():

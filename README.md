@@ -1,5 +1,8 @@
 # ATS OneBSS
 
+Phiên bản 0.9.38 hỗ trợ một nhân sự thuộc nhiều nhóm: điểm tháng được tách theo
+nhóm dịch vụ để cân bằng tải và tránh cộng chéo giữa các nhóm.
+
 Phiên bản 0.9.37 lưu tuyến dự án của phiếu đang chờ để không mất nhận diện
 khi dừng/chạy lại; nếu không đọc được `Tên KH`, app giữ phiếu chưa giao thay vì
 áp dụng nhầm quy tắc dịch vụ. Tab `Phiếu chưa giao` hỗ trợ chỉ định nhân sự riêng

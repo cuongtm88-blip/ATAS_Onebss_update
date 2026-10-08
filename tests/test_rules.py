@@ -329,6 +329,23 @@ def test_canonical_member_name_resolves_ly_bich_hang_sheet_alias():
     assert member_group(rules, "Lý Bích Hằng") == "Nhóm 1"
 
 
+def test_member_group_uses_service_context_for_employee_in_two_groups():
+    group_1 = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (Member("Lê Đức Tuấn", "Nhóm 1", "Chính"),),
+    )
+    group_2 = ServiceRule(
+        4, "Voice Brandname", Decimal("20"), "",
+        (Member("Lê Đức Tuấn", "Nhóm 2", "Chính"),),
+    )
+    rules = [group_1, group_2]
+
+    assert member_group(rules, "Lê Đức Tuấn", group_1) == "Nhóm 1"
+    assert member_group(rules, "Lê Đức Tuấn", group_2) == "Nhóm 2"
+    with pytest.raises(RuleError, match="xuất hiện ở nhiều nhóm"):
+        member_group(rules, "Lê Đức Tuấn")
+
+
 def test_loads_and_prioritizes_named_project_rules(tmp_path):
     path = tmp_path / "projects.toml"
     path.write_text(

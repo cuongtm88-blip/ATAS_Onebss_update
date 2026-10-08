@@ -190,9 +190,23 @@ def canonical_member_name(rules: list[ServiceRule], name: str) -> str:
     raise RuleError(f"Nhân viên {name} không có trong nhóm của file quy tắc")
 
 
-def member_group(rules: list[ServiceRule], name: str) -> str:
+def member_group(
+    rules: list[ServiceRule], name: str, service_rule: ServiceRule | None = None
+) -> str:
     canonical = canonical_member_name(rules, name)
     wanted = normalize(canonical)
+    if service_rule is not None:
+        service_groups = {
+            member.group
+            for member in service_rule.members
+            if normalize(member.name) == wanted
+        }
+        if len(service_groups) == 1:
+            return service_groups.pop()
+        if len(service_groups) > 1:
+            raise RuleError(
+                f"Nhân viên {name} thuộc nhiều nhóm trong cùng quy tắc dịch vụ"
+            )
     groups = {
         member.group
         for rule in rules
@@ -202,6 +216,11 @@ def member_group(rules: list[ServiceRule], name: str) -> str:
     if len(groups) > 1:
         raise RuleError(f"Nhân viên {name} xuất hiện ở nhiều nhóm: {', '.join(sorted(groups))}")
     return groups.pop()
+
+
+def member_score_key(group: str, name: str) -> str:
+    """Stable score identity for employees who belong to more than one group."""
+    return f"{normalize(unaccent(group))}::{normalize(name)}"
 
 
 def _load_group_rules(workbook) -> list[ServiceRule]:

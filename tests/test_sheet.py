@@ -14,6 +14,7 @@ from ats_onebss.browser import (
     _sheet_text_input,
 )
 from ats_onebss.models import Assignment, Ticket
+from ats_onebss.rules import member_score_key
 
 
 def test_sheet_subscriber_key_treats_text_marker_as_blank():
@@ -137,6 +138,19 @@ def test_sheet_month_scores_handles_blank_merged_labels_from_gviz():
     assert _sheet_month_scores(rows, ("An", "Bình")) == {
         "An": Decimal("17"), "Bình": Decimal("29")
     }
+
+
+def test_sheet_month_scores_keeps_dual_group_member_totals_separate():
+    group_1_names = [f"Nhân sự {index}" for index in range(1, 12)]
+    group_1_names += ["Lê Đức Tuấn", "Nhân sự 13", "Nhân sự 14"]
+    group_2_names = ["Lê Đức Tuấn", "Nhân sự 16", "Nhân sự 17", "Nhân sự 18"]
+    names = ["Nhân sự thực hiện", *group_1_names, *group_2_names]
+    points = ["Điểm quy đổi", *(str(index) for index in range(1, 19))]
+
+    scores = _sheet_month_scores([names, ["Tổng phiếu giao"], points])
+
+    assert scores[member_score_key("Nhóm 1", "Lê Đức Tuấn")] == Decimal("12")
+    assert scores[member_score_key("Nhóm 2", "Lê Đức Tuấn")] == Decimal("15")
 
 
 def test_google_sheet_append_skips_assignment_excluded_by_rule():

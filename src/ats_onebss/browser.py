@@ -22,6 +22,7 @@ from playwright.async_api import BrowserContext, Locator, Page, async_playwright
 
 from .config import Config
 from .models import Assignment, ProjectRule, Ticket
+from .rules import member_score_key
 from .text import normalize, ticket_identity, unaccent
 
 
@@ -297,16 +298,34 @@ def _sheet_month_scores(
             break
     if names is None or points is None:
         return {}
-    result: dict[str, Decimal] = {}
+    entries: list[tuple[int, str, Decimal]] = []
     for index in range(1, min(len(names), len(points))):
         name = names[index].strip()
         raw = points[index].strip().replace(" ", "")
         if not name or not raw:
             continue
         try:
-            result[name] = Decimal(raw.replace(",", "."))
+            entries.append((index, name, Decimal(raw.replace(",", "."))))
         except InvalidOperation:
             continue
+    occurrences: dict[str, list[tuple[int, str, Decimal]]] = {}
+    for entry in entries:
+        occurrences.setdefault(normalize(entry[1]), []).append(entry)
+    result: dict[str, Decimal] = {}
+    for index, name, score in entries:
+        matches = occurrences[normalize(name)]
+        if len(matches) > 1:
+            # Monthly sheets reserve B:O for Group 1 and P:S for Group 2.
+            # Keep dual-group employees' score totals separate even though
+            # the assignment column correctly stores one canonical name.
+            group = "Nhóm 1" if 1 <= index <= 14 else "Nhóm 2" if 15 <= index <= 18 else ""
+            if group and any(
+                (1 <= other_index <= 14) != (15 <= other_index <= 18)
+                for other_index, _, _ in matches
+            ):
+                result[member_score_key(group, name)] = score
+                continue
+        result[name] = result.get(name, Decimal(0)) + score
     return result
 
 

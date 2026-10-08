@@ -7,9 +7,10 @@ from .rules import (
     RuleError,
     canonical_member_name,
     eligible_members,
+    member_group,
+    member_score_key,
     match_project_rule,
     match_rule,
-    member_group,
     voice_brandname_mode,
 )
 from .text import assignment_cohort_key, normalize, ticket_identity, unaccent
@@ -46,39 +47,78 @@ def plan_assignments(
     excluded = {normalize(name) for name in excluded_names}
 
     member_names_by_group: dict[str, set[str]] = {}
-    member_group_by_name: dict[str, str] = {}
     for rule in rules:
         for member in rule.members:
             key = normalize(member.name)
-            prior_group = member_group_by_name.get(key)
-            if prior_group and prior_group != member.group:
-                raise RuleError(
-                    f"Nhân viên {member.name} xuất hiện ở nhiều nhóm: "
-                    f"{prior_group}, {member.group}"
-                )
-            member_group_by_name[key] = member.group
-            member_names_by_group.setdefault(member.group, set()).add(key)
-    def adjusted_load(name: str) -> Decimal:
-        """Monthly completion ratio versus the employee's fixed home group."""
+            member_names_by_group.setdefault(
+                normalize(unaccent(member.group)), set()
+            ).add(key)
+
+    def score_for(name: str, group: str | None = None) -> Decimal:
         key = normalize(name)
-        group = member_group_by_name.get(key)
-        group_names = member_names_by_group.get(group or "", set())
+        if group:
+            group_key = member_score_key(group, name)
+            if group_key in scores:
+                return scores[group_key]
+        return scores.get(key, Decimal(0))
+
+    def candidate_group(name: str, rule: ServiceRule, group_hint: str = "") -> str | None:
+        key = normalize(name)
+        service_groups = {
+            member.group for member in rule.members
+            if normalize(member.name) == key
+        }
+        if group_hint and normalize(unaccent(group_hint)) in {
+            normalize(unaccent(group)) for group in service_groups
+        }:
+            return group_hint
+        if len(service_groups) == 1:
+            return next(iter(service_groups))
+        if group_hint and not service_groups:
+            return group_hint
+        if len(service_groups) > 1:
+            raise RuleError(
+                f"Nhân viên {name} xuất hiện ở nhiều nhóm trong quy tắc "
+                f"dịch vụ {rule.service}"
+            )
+        global_groups = {
+            member.group for source_rule in rules for member in source_rule.members
+            if normalize(member.name) == key
+        }
+        if len(global_groups) == 1:
+            return next(iter(global_groups))
+        if len(global_groups) > 1:
+            raise RuleError(
+                f"Không xác định được nhóm cân bằng tải của {name} "
+                f"cho dịch vụ {rule.service}"
+            )
+        return None
+
+    def adjusted_load(name: str, rule: ServiceRule, group_hint: str = "") -> Decimal:
+        """Compare monthly load against peers in this ticket's service group."""
+        group = candidate_group(name, rule, group_hint)
+        group_key = normalize(unaccent(group)) if group else ""
+        group_names = member_names_by_group.get(group_key, set())
         average = (
-            sum((scores.get(person, Decimal(0)) for person in group_names), Decimal(0))
+            sum((score_for(person, group) for person in group_names), Decimal(0))
             / len(group_names)
             if group_names else Decimal(0)
         )
-        denominator = average * target_ratios.get(key, Decimal(1))
+        denominator = average * target_ratios.get(normalize(name), Decimal(1))
         if denominator > 0:
-            return scores.get(key, Decimal(0)) / denominator
-        return scores.get(key, Decimal(0)) / target_ratios.get(key, Decimal(1))
+            return score_for(name, group) / denominator
+        return score_for(name, group) / target_ratios.get(normalize(name), Decimal(1))
 
     def choose_member(
         members: list[str], rule: ServiceRule,
         pick_key: tuple[str, tuple[str, ...]],
+        group_hint: str = "",
     ) -> str:
-        lowest = min(adjusted_load(name) for name in members)
-        tied = [name for name in members if adjusted_load(name) == lowest]
+        lowest = min(adjusted_load(name, rule, group_hint) for name in members)
+        tied = [
+            name for name in members
+            if adjusted_load(name, rule, group_hint) == lowest
+        ]
         if any(member.target_share is not None for member in rule.members):
             shares = {
                 normalize(member.name): member.target_share or Decimal(0)
@@ -227,7 +267,9 @@ def plan_assignments(
             if project:
                 if normalize(project.assignee) in excluded:
                     continue
-                groups = {member_group(rules, project.assignee): [project.assignee]}
+                groups = {
+                    member_group(rules, project.assignee, rule): [project.assignee]
+                }
                 project_name = project.project_name
             else:
                 groups = eligible_members(
@@ -303,11 +345,17 @@ def plan_assignments(
                     # this fallback. Keep the durable local pin unchanged so
                     # the original owner resumes the cohort after returning.
                     pick_key = ("cohort", tuple(normalize(name) for name in eligible))
-                    selected = choose_member(eligible, rule, pick_key)
+                    selected = choose_member(
+                        eligible, rule, pick_key,
+                        next(iter(groups)) if len(groups) == 1 else "",
+                    )
                     cohort_pins[cohort_key] = selected
             else:
                 pick_key = ("cohort", tuple(normalize(name) for name in eligible))
-                selected = choose_member(eligible, rule, pick_key)
+                selected = choose_member(
+                    eligible, rule, pick_key,
+                    next(iter(groups)) if len(groups) == 1 else "",
+                )
                 cohort_pins[cohort_key] = selected
             assignees.append(selected)
         else:
@@ -320,7 +368,9 @@ def plan_assignments(
             else:
                 for group, members in groups.items():
                     pick_key = (group, tuple(normalize(name) for name in members))
-                    assignees.append(choose_member(members, rule, pick_key))
+                    assignees.append(
+                        choose_member(members, rule, pick_key, group)
+                    )
         assignment = Assignment(
             ticket, tuple(assignees),
             rule.points if rule.count_points else Decimal(0), rule.row_number,
@@ -335,7 +385,16 @@ def plan_assignments(
         if not sheet_existing:
             share = assignment.points_per_person
             for assignee in assignees:
-                key = normalize(assignee)
+                group_hint = next(
+                    (
+                        group for group, group_members in groups.items()
+                        if any(normalize(name) == normalize(assignee) for name in group_members)
+                    ),
+                    "",
+                )
+                group = candidate_group(assignee, rule, group_hint)
+                group_key = member_score_key(group, assignee) if group else ""
+                key = group_key if group_key in scores else normalize(assignee)
                 scores[key] = scores.get(key, Decimal(0)) + share
         result.append(assignment)
     return result

@@ -476,35 +476,11 @@ def _province_from_address(address: str) -> str:
     return ""
 
 
-async def _row_matches_sale_subscriber(row: Locator, subscriber_id: str) -> bool:
-    """Confirm a selected grid row by Mã thuê bao bán only.
-
-    Mã TB thi công is a different identifier on OneBSS and must never be used
-    to validate the sale subscriber selected from the assignment grid.
-    """
-    wanted = normalize(subscriber_id)
-    if not wanted:
-        return False
-    cells = await row.locator("td").evaluate_all(
-        """cells => cells.map(cell => ({
-            text: cell.innerText,
-            label: cell.getAttribute('aria-label') || ''
-        }))"""
-    )
-    labeled = [
-        cell for cell in cells
-        if "mã thuê bao bán" in normalize(cell.get("label", ""))
-    ]
-    candidates = labeled or cells
-    return any(normalize(cell.get("text", "")) == wanted for cell in candidates)
-
-
 async def _row_matches_ticket(row: Locator, ticket: Ticket) -> bool:
-    """Validate the selected sale row, including tickets without a subscriber id."""
-    if ticket.subscriber_id:
-        return await _row_matches_sale_subscriber(row, ticket.subscriber_id)
-    wanted = normalize(ticket.transaction_id)
-    if not wanted:
+    """Validate the selected row using the complete sale-ticket identity."""
+    transaction_id = normalize(ticket.transaction_id)
+    subscriber_id = normalize(ticket.subscriber_id)
+    if not transaction_id:
         return False
     cells = await row.locator("td").evaluate_all(
         """cells => cells.map(cell => ({
@@ -512,12 +488,28 @@ async def _row_matches_ticket(row: Locator, ticket: Ticket) -> bool:
             label: cell.getAttribute('aria-label') || ''
         }))"""
     )
-    labeled = [
+    transaction_cells = [
         cell for cell in cells
         if "mã giao dịch bán" in normalize(cell.get("label", ""))
     ]
-    candidates = labeled or cells
-    return any(normalize(cell.get("text", "")) == wanted for cell in candidates)
+    subscriber_cells = [
+        cell for cell in cells
+        if "mã thuê bao bán" in normalize(cell.get("label", ""))
+    ]
+    # Syncfusion exposes the actual column name in aria-label. Do not fall
+    # back to searching arbitrary cells: a matching value in another column
+    # is not proof that this is the requested sale row.
+    if not transaction_cells or (subscriber_id and not subscriber_cells):
+        return False
+    transaction_matches = any(
+        normalize(cell.get("text", "")) == transaction_id
+        for cell in transaction_cells
+    )
+    subscriber_matches = not subscriber_id or any(
+        normalize(cell.get("text", "")) == subscriber_id
+        for cell in subscriber_cells
+    )
+    return transaction_matches and subscriber_matches
 
 
 async def _visible(locator: Locator, timeout_ms: int = 30_000) -> Locator:
@@ -1360,8 +1352,7 @@ class OneBSSClient:
         rows = grid.locator(".e-gridcontent tr.e-row")
         for index in range(await rows.count()):
             row = rows.nth(index)
-            text = await row.inner_text()
-            if ticket.transaction_id in text and ticket.subscriber_id in text:
+            if await _row_matches_ticket(row, ticket):
                 return row
         raise RuntimeError(f"Không còn thấy phiếu {ticket.key} trên trang")
 
@@ -1380,6 +1371,41 @@ class OneBSSClient:
             if await field.count():
                 return (await field.first.input_value()).strip()
         return ""
+
+    async def _wait_for_ticket_detail(self, ticket: Ticket) -> bool:
+        """Wait until the detail form has caught up with the selected grid row."""
+        assert self.page
+        # Selecting a row starts an asynchronous OneBSS request. The form can
+        # still contain the previous ticket while its loading overlay appears.
+        await self.page.wait_for_timeout(750)
+        try:
+            await self.page.wait_for_function(
+                """() => !Array.from(document.querySelectorAll('.overlay-common.show'))
+                    .some(element => {
+                        const style = getComputedStyle(element);
+                        return style.display !== 'none' && style.visibility !== 'hidden';
+                    })""",
+                timeout=8_000,
+            )
+        except Exception:
+            return False
+
+        expected_transaction = normalize(ticket.transaction_id)
+        expected_subscriber_name = normalize(ticket.subscriber_name)
+        deadline = asyncio.get_running_loop().time() + 8
+        while asyncio.get_running_loop().time() < deadline:
+            shown_transaction = normalize(await self._detail_value("Mã GD bán"))
+            shown_subscriber_name = normalize(await self._detail_value("Tên TB"))
+            if (
+                shown_transaction == expected_transaction
+                and (
+                    not expected_subscriber_name
+                    or shown_subscriber_name == expected_subscriber_name
+                )
+            ):
+                return True
+            await self.page.wait_for_timeout(250)
+        return False
 
     async def _technical_value(self, label: str) -> str:
         """Read one value from the HTML technical-information panel."""
@@ -1409,9 +1435,10 @@ class OneBSSClient:
     ) -> list[Ticket]:
         """Attach missing Sheet metadata and project-routing details.
 
-        Prefer the main-grid/API values. Rules which combine Tên KH with Ghi
-        chú always read both values from the selected detail form: OneBSS can
-        return a non-empty but abbreviated customer value in its ticket list.
+        For project predicates, verify the selected form against the exact
+        sale-ticket identity and use its values only; grid/API metadata may be
+        stale or belong to another row. Other enrichment can use grid/API
+        fallbacks when project identity is not involved.
         If Tỉnh LĐ is blank, derive it only from an explicit province/city in
         Địa chỉ LĐ. Cache detail values by ticket occurrence so repeated
         planning after each batch does not click through the whole grid again.
@@ -1422,7 +1449,7 @@ class OneBSSClient:
             "customer_name" in rule.match_fields for rule in project_rules
         )
         requires_detail_project_verification = any(
-            "customer_name" in rule.match_fields and rule.required_contains
+            {"customer_name", "subscriber_name"}.intersection(rule.match_fields)
             for rule in project_rules
         )
         for ticket in tickets:
@@ -1482,17 +1509,18 @@ class OneBSSClient:
             if cached is None:
                 row = await self._ticket_row(ticket)
                 await row.click()
-                deadline = asyncio.get_running_loop().time() + 3
-                details_match = False
-                while asyncio.get_running_loop().time() < deadline:
-                    # Validate against the Mã thuê bao bán cell that was used
-                    # to select this row. Mã TB thi công is unrelated and can
-                    # legitimately contain a completely different value.
-                    details_match = await _row_matches_ticket(row, ticket)
-                    if details_match:
-                        break
-                    await asyncio.sleep(0.05)
+                # The row identity is exact, but its detail panel updates
+                # asynchronously. Confirm the form itself before trusting any
+                # project fields; a non-empty Tên KH alone may be stale.
+                row_matches = await _row_matches_ticket(row, ticket)
+                details_match = (
+                    row_matches and await self._wait_for_ticket_detail(ticket)
+                )
                 customer_name = ""
+                subscriber_name = ""
+                notes = ""
+                labor_address = ""
+                connection_address = ""
                 if details_match:
                     # OneBSS populates the detail form asynchronously after
                     # selection. Poll the actual Tên KH field instead of
@@ -1503,21 +1531,42 @@ class OneBSSClient:
                         if customer_name:
                             break
                         await self.page.wait_for_timeout(300)
-                # Never copy values left over from a previously selected row.
-                customer_name = customer_name or ticket.customer_name
-                subscriber_name = (
-                    await self._detail_value("Tên TB") if details_match else ""
-                ) or ticket.subscriber_name
-                notes = (
-                    await self._detail_value("Ghi chú") if details_match else ""
-                ) or ticket.notes
-                labor_address = (
-                    await self._detail_value("Địa chỉ LĐ") if details_match else ""
-                ) or ticket.labor_address
+                # A customer name from the grid/API/pending-project cache is
+                # not authoritative when the selected row could not be
+                # validated. In particular, never let it trigger a project
+                # override for a different ticket.
+                if requires_detail_project_verification and not details_match:
+                    customer_name = ""
+                    subscriber_name = ""
+                    notes = ""
+                    labor_address = ""
+                    connection_address = ""
+                elif requires_detail_project_verification:
+                    # Project predicates must use values read from the verified
+                    # selected form, never fall back to API/grid/pending data.
+                    # An empty form value is intentionally left empty so CLI
+                    # keeps the ticket pending instead of guessing a project.
+                    subscriber_name = await self._detail_value("Tên TB")
+                    notes = await self._detail_value("Ghi chú")
+                    labor_address = await self._detail_value("Địa chỉ LĐ")
+                    connection_address = ticket.connection_address
+                else:
+                    customer_name = customer_name or ticket.customer_name
+                    subscriber_name = (
+                        subscriber_name
+                        or (await self._detail_value("Tên TB") if details_match else "")
+                        or ticket.subscriber_name
+                    )
+                    notes = notes or (
+                        await self._detail_value("Ghi chú") if details_match else ""
+                    ) or ticket.notes
+                    labor_address = labor_address or (
+                        await self._detail_value("Địa chỉ LĐ") if details_match else ""
+                    ) or ticket.labor_address
+                    connection_address = ticket.connection_address
                 labor_province = ticket.labor_province or _province_from_address(
                     labor_address
                 )
-                connection_address = ticket.connection_address
                 cached = (
                     customer_name,
                     subscriber_name,
@@ -1526,7 +1575,8 @@ class OneBSSClient:
                     connection_address,
                     labor_province,
                 )
-                self._ticket_details[ticket.key] = cached
+                if not (requires_detail_project_verification and not details_match):
+                    self._ticket_details[ticket.key] = cached
             (
                 customer_name,
                 subscriber_name,

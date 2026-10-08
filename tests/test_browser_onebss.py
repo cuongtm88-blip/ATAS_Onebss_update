@@ -11,9 +11,125 @@ from ats_onebss.browser import (
     _installation_type_from_api,
     _province_from_address,
     _project_details_from_api,
+    _row_matches_ticket,
     _ticket_metadata_from_api,
 )
 from ats_onebss.models import ProjectRoute, ProjectRule, Ticket
+
+
+def test_detail_row_identity_requires_exact_transaction_and_subscriber_ids():
+    class Cells:
+        async def evaluate_all(self, _script):
+            # The subscriber matches, but this is a different sale transaction.
+            return [{
+                "text": "OTHER-TX/1",
+                "label": "OTHER-TX/1 column header Mã giao dịch bán",
+            }, {
+                "text": "inf0007d1",
+                "label": "inf0007d1 column header Mã thuê bao bán",
+            }]
+
+    class Row:
+        def locator(self, selector):
+            assert selector == "td"
+            return Cells()
+
+    ticket = Ticket("LCI-LD/00301693", "inf0007d1", "Tên Miền Việt Nam")
+
+    assert not asyncio.run(_row_matches_ticket(Row(), ticket))
+
+
+def test_detail_row_identity_rejects_subscriber_mismatch_even_if_transaction_matches():
+    class Cells:
+        async def evaluate_all(self, _script):
+            return [{
+                "text": "LCI-LD/00301693",
+                "label": "LCI-LD/00301693 column header Mã giao dịch bán",
+            }, {
+                "text": "wrong-subscriber",
+                "label": "wrong-subscriber column header Mã thuê bao bán",
+            }]
+
+    class Row:
+        def locator(self, selector):
+            assert selector == "td"
+            return Cells()
+
+    ticket = Ticket("LCI-LD/00301693", "inf0007d1", "Tên Miền Việt Nam")
+
+    assert not asyncio.run(_row_matches_ticket(Row(), ticket))
+
+
+def test_project_details_wait_for_form_to_refresh_instead_of_using_previous_ticket():
+    class Cells:
+        async def evaluate_all(self, _script):
+            return [{
+                "text": "LCI-LD/00301693",
+                "label": "LCI-LD/00301693 column header Mã giao dịch bán",
+            }, {
+                "text": "inf0007d1",
+                "label": "inf0007d1 column header Mã thuê bao bán",
+            }]
+
+    class Row:
+        click = AsyncMock()
+
+        def locator(self, selector):
+            assert selector == "td"
+            return Cells()
+
+    async def run():
+        client = OneBSSClient(SimpleNamespace())
+        form_ready = False
+
+        async def wait_for_timeout(milliseconds):
+            nonlocal form_ready
+            if milliseconds == 250:
+                form_ready = True
+
+        client.page = SimpleNamespace(
+            wait_for_timeout=AsyncMock(side_effect=wait_for_timeout),
+            wait_for_function=AsyncMock(),
+        )
+        client._ticket_row = AsyncMock(return_value=Row())
+
+        async def detail_value(label):
+            if not form_ready:
+                return {
+                    "Mã GD bán": "OLD-TICKET",
+                    "Tên TB": "Khách hàng trước đó",
+                    "Tên KH": "Ban Quản Lý Đầu Tư Và Xây Dựng Ngành Bảo Hiểm Xã Hội",
+                }.get(label, "")
+            return {
+                "Mã GD bán": "LCI-LD/00301693",
+                "Tên TB": "Trường THCS và THPT Khánh Yên",
+                "Tên KH": "Trường THCS và THPT Khánh Yên",
+                "Địa chỉ LĐ": "Thôn Độc Lập, Xã Khánh Yên, Tỉnh Lào Cai",
+            }.get(label, "")
+
+        client._detail_value = AsyncMock(side_effect=detail_value)
+        ticket = Ticket(
+            "LCI-LD/00301693",
+            "inf0007d1",
+            "Tên Miền Việt Nam (Thẩm định)",
+            subscriber_name="Trường THCS và THPT Khánh Yên",
+            customer_name="Ban Quản Lý Đầu Tư Và Xây Dựng Ngành Bảo Hiểm Xã Hội",
+        )
+        project = ProjectRule(
+            name="Dự án BHXH",
+            contains="Ban Quản Lý Đầu Tư Và Xây Dựng Ngành Bảo Hiểm Xã Hội",
+            match_fields=("customer_name",),
+            priority=90,
+            route_field="labor_address",
+            routes=(ProjectRoute("Đoàn Hải Hà", ("Lào Cai",)),),
+        )
+
+        enriched = await client.enrich_ticket_details([ticket], [project])
+        return enriched[0]
+
+    enriched_ticket = asyncio.run(run())
+
+    assert enriched_ticket.customer_name == "Trường THCS và THPT Khánh Yên"
 
 
 def test_profile_lock_prevents_two_sessions(tmp_path: Path):
@@ -241,9 +357,12 @@ def test_detail_enrichment_reads_subscriber_for_ticket_without_subscriber_id():
             return Cells()
 
     client = OneBSSClient(SimpleNamespace())
-    client.page = SimpleNamespace(wait_for_timeout=AsyncMock())
+    client.page = SimpleNamespace(
+        wait_for_timeout=AsyncMock(), wait_for_function=AsyncMock()
+    )
     client._ticket_row = AsyncMock(return_value=Row())
     client._detail_value = AsyncMock(side_effect=lambda label: {
+        "Mã GD bán": "00052711",
         "Tên KH": "Khách hàng RVC",
         "Tên TB": "Thuê bao RVC",
         "Địa chỉ LĐ": "BigC, Tp Đà Nẵng",
@@ -264,6 +383,9 @@ def test_detail_enrichment_validates_sale_subscriber_not_construction_code():
     class Cells:
         async def evaluate_all(self, _script):
             return [{
+                "text": "VNP-KP/00001068",
+                "label": "VNP-KP/00001068 column header Mã giao dịch bán",
+            }, {
                 "text": "MN001008776",
                 "label": "MN001008776 column header Mã thuê bao bán",
             }]
@@ -276,12 +398,16 @@ def test_detail_enrichment_validates_sale_subscriber_not_construction_code():
             return Cells()
 
     client = OneBSSClient(SimpleNamespace())
-    client.page = SimpleNamespace(wait_for_timeout=AsyncMock())
+    client.page = SimpleNamespace(
+        wait_for_timeout=AsyncMock(), wait_for_function=AsyncMock()
+    )
     client._ticket_row = AsyncMock(return_value=Row())
 
     async def detail_value(label):
         assert label != "Mã TB thi công"
         return {
+            "Mã GD bán": "VNP-KP/00001068",
+            "Tên TB": "Cục Viễn Thông Và Cơ Yếu-bộ Công An",
             "Tên KH": "Cục Viễn Thông & Cơ Yếu Bca",
             "Địa chỉ LĐ": "Thị xã Sơn Tây, Hà Nội, Việt Nam",
         }.get(label, "")
@@ -312,7 +438,7 @@ def test_detail_enrichment_validates_sale_subscriber_not_construction_code():
     assert enriched[0].labor_address == "Thị xã Sơn Tây, Hà Nội, Việt Nam"
     assert enriched[0].connection_address == ""
     client._technical_value.assert_not_awaited()
-    client.page.wait_for_timeout.assert_not_awaited()
+    client.page.wait_for_timeout.assert_awaited()
 
 
 def test_detail_enrichment_verifies_note_qualified_project_from_form():
@@ -320,6 +446,9 @@ def test_detail_enrichment_verifies_note_qualified_project_from_form():
     class Cells:
         async def evaluate_all(self, _script):
             return [{
+                "text": "VNP-LD/00078730",
+                "label": "VNP-LD/00078730 column header Mã giao dịch bán",
+            }, {
                 "text": "mwk00109h",
                 "label": "mwk00109h column header Mã thuê bao bán",
             }]
@@ -332,9 +461,12 @@ def test_detail_enrichment_verifies_note_qualified_project_from_form():
             return Cells()
 
     client = OneBSSClient(SimpleNamespace())
-    client.page = SimpleNamespace(wait_for_timeout=AsyncMock())
+    client.page = SimpleNamespace(
+        wait_for_timeout=AsyncMock(), wait_for_function=AsyncMock()
+    )
     client._ticket_row = AsyncMock(return_value=Row())
     client._detail_value = AsyncMock(side_effect=lambda label: {
+        "Mã GD bán": "VNP-LD/00078730",
         "Tên KH": "Cục Quản Trị Ngân Hàng Nhà Nước Việt Nam",
         "Tên TB": "Ngân hàng nhà nước khu vực 7",
         "Ghi chú": "Kênh phục vụ HNTH kết nối đến MCU",
@@ -365,6 +497,9 @@ def test_detail_enrichment_keeps_labor_province_as_project_fallback():
     class Cells:
         async def evaluate_all(self, _script):
             return [{
+                "text": "VNP-TD/00097957",
+                "label": "VNP-TD/00097957 column header Mã giao dịch bán",
+            }, {
                 "text": "MW000020934",
                 "label": "MW000020934 column header Mã thuê bao bán",
             }]
@@ -377,9 +512,13 @@ def test_detail_enrichment_keeps_labor_province_as_project_fallback():
             return Cells()
 
     client = OneBSSClient(SimpleNamespace())
-    client.page = SimpleNamespace(wait_for_timeout=AsyncMock())
+    client.page = SimpleNamespace(
+        wait_for_timeout=AsyncMock(), wait_for_function=AsyncMock()
+    )
     client._ticket_row = AsyncMock(return_value=Row())
     client._detail_value = AsyncMock(side_effect=lambda label: {
+        "Mã GD bán": "VNP-TD/00097957",
+        "Tên TB": "Cục Viễn Thông & Cơ Yếu Bca",
         "Tên KH": "Cục Viễn Thông & Cơ Yếu Bca",
         "Địa chỉ LĐ": "Điểm lắp đặt Cát Hải",
     }.get(label, ""))

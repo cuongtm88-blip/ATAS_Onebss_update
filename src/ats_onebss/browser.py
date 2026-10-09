@@ -260,6 +260,28 @@ def _sheet_assignment_index(
     return {identity: tuple(item[1]) for identity, item in latest.items()}
 
 
+def _sheet_service_assignment_index(
+    rows: list[list[str]], service: str,
+) -> dict[str, str]:
+    """Return each month's latest owner for a service, deduplicated by ticket."""
+    wanted_service = normalize(service)
+    latest: dict[str, tuple[datetime, str]] = {}
+    for row in rows:
+        if not _is_sheet_data_row(row) or len(row) < 5:
+            continue
+        if normalize(row[3]) != wanted_service:
+            continue
+        try:
+            assigned_at = datetime.strptime(row[0].strip(), "%d/%m/%Y %H:%M")
+        except ValueError:
+            continue
+        identity = ticket_identity(row[1], _sheet_subscriber_key(row[2]))
+        current = latest.get(identity)
+        if current is None or assigned_at >= current[0]:
+            latest[identity] = (assigned_at, row[4].strip())
+    return {identity: item[1] for identity, item in latest.items()}
+
+
 class SheetAssignmentSource(dict[str, tuple[str, ...]]):
     """Historical Sheet routing plus the identities present in this month."""
 
@@ -267,9 +289,11 @@ class SheetAssignmentSource(dict[str, tuple[str, ...]]):
         self,
         assignments: dict[str, tuple[str, ...]],
         current_keys: Iterable[str],
+        service_assignments: dict[str, dict[str, str]] | None = None,
     ) -> None:
         super().__init__(assignments)
         self.current_keys = set(current_keys)
+        self.service_assignments = service_assignments or {}
 
 
 def _sheet_month_scores(
@@ -2148,9 +2172,17 @@ class GoogleSheetClient:
             (rows for name, rows in exported if normalize(name) == normalize(current_name)),
             [],
         )
+        service_assignments = {
+            service: _sheet_service_assignment_index(current_rows, service)
+            for service in (
+                "B-FONE", "SIP", "Điện thoại cố định", "Thuê bao POTS",
+                "1800-1900",
+            )
+        }
         assignments = SheetAssignmentSource(
             _sheet_assignment_index(exported),
             _sheet_assignment_index([(current_name, current_rows)]),
+            service_assignments,
         )
         scores = _sheet_month_scores(current_rows, score_member_names)
         print(

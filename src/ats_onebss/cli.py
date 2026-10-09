@@ -350,6 +350,15 @@ async def collect_plan(
             skipped.append((ticket, str(error)))
     now = datetime.now(ZoneInfo(config.timezone))
     cohort_conflicts: dict[str, str] = {}
+    monthly_service_assignments = {
+        service: dict(owners)
+        for service, owners in ledger.service_assignments(
+            now.year,
+            now.month,
+        ).items()
+    }
+    for service, owners in getattr(sheet_assignees, "service_assignments", {}).items():
+        monthly_service_assignments[service] = dict(owners)
     assignments = plan_assignments(
         valid,
         rules,
@@ -364,6 +373,7 @@ async def collect_plan(
         ledger.cohort_assignees(),
         cohort_conflicts,
         manual_assignees,
+        monthly_service_assignments,
     )
     for ticket in valid:
         pinned = cohort_conflicts.get(ticket.key)

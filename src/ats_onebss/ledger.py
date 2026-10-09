@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from .models import Assignment, Ticket
-from .text import assignment_cohort_key, normalize
+from .text import assignment_cohort_key, normalize, ticket_identity
 
 
 class Ledger:
@@ -205,6 +205,37 @@ class Ledger:
                 continue
             scores[name] = scores.get(name, Decimal(0)) + value
         return scores
+
+    def service_assignments(
+        self, year: int, month: int,
+    ) -> dict[str, dict[str, str]]:
+        """Return latest local owner per service/ticket for this calendar month."""
+        sheet_pattern = f"__/{month:02d}/{year} %"
+        created_month = f"{year}-{month:02d}"
+        with self.connect() as db:
+            rows = db.execute(
+                """
+                SELECT transaction_id, subscriber_id, service, assignee,
+                       created_at, sheet_timestamp
+                FROM assignments
+                WHERE onebss_saved = 1
+                  AND (sheet_timestamp LIKE ? OR
+                       (sheet_timestamp = '' AND substr(created_at, 1, 7) = ?))
+                ORDER BY created_at, rowid
+                """,
+                (sheet_pattern, created_month),
+            ).fetchall()
+        latest: dict[str, dict[str, tuple[str, str]]] = {}
+        for transaction, subscriber, service, assignee, created_at, _stamp in rows:
+            service_key = normalize(service)
+            identity = ticket_identity(transaction, subscriber)
+            current = latest.setdefault(service_key, {}).get(identity)
+            if current is None or created_at >= current[0]:
+                latest[service_key][identity] = (created_at, assignee)
+        return {
+            service: {identity: value[1] for identity, value in tickets.items()}
+            for service, tickets in latest.items()
+        }
 
     def completed_keys(self) -> set[str]:
         with self.connect() as db:

@@ -546,3 +546,70 @@ def test_returned_voice_xu_ly_from_le_duc_tuan_does_not_mark_reassignment():
     assert result[0].assignees == ("Lê Đức Tuấn",)
     assert result[0].sheet_existing is True
     assert result[0].sheet_reassignment is False
+
+
+def test_percentage_services_use_excel_shares_and_do_not_pin_customer_cohorts():
+    rule = ServiceRule(
+        3, "SIP vendor name", Decimal("25"), "",
+        (
+            Member("Dương", "Nhóm 1", "Chính", Decimal("0.7")),
+            Member("Hằng", "Nhóm 1", "Chính", Decimal("0.3")),
+        ),
+        sheet_service="SIP",
+    )
+    tickets = [
+        Ticket(
+            f"GD{i}", f"TB{i}", rule.service, customer_name="Cùng khách",
+            labor_address="Cùng địa chỉ",
+        )
+        for i in range(10)
+    ]
+
+    result = plan_assignments(tickets, [rule])
+
+    assert sum(item.assignees == ("Dương",) for item in result) == 7
+    assert sum(item.assignees == ("Hằng",) for item in result) == 3
+    assert all(item.cohort_key == "" for item in result)
+
+
+def test_percentage_services_continue_monthly_share_from_sheet_history():
+    rule = ServiceRule(
+        3, "MegaWan vendor name", Decimal("17"), "",
+        (
+            Member("Dương", "Nhóm 1", "Chính", Decimal("0.7")),
+            Member("Hằng", "Nhóm 1", "Chính", Decimal("0.3")),
+        ),
+        sheet_service="SIP",
+    )
+    history = {
+        **{f"history-{index}": "Dương" for index in range(7)},
+        **{f"history-{index + 7}": "Hằng" for index in range(3)},
+    }
+    result = plan_assignments(
+        [Ticket(f"GD{i}", f"TB{i}", rule.service) for i in range(10)],
+        [rule], service_assignments={"SIP": history},
+    )
+
+    assert sum(item.assignees == ("Dương",) for item in result) == 7
+    assert sum(item.assignees == ("Hằng",) for item in result) == 3
+
+
+def test_percentage_routing_does_not_change_other_services():
+    rule = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (
+            Member("Dương", "Nhóm 1", "Chính", Decimal("0.7")),
+            Member("Hằng", "Nhóm 1", "Chính", Decimal("0.3")),
+        ),
+    )
+    tickets = [
+        Ticket(
+            f"GD{i}", f"TB{i}", "Fiber", customer_name="Cùng khách",
+            labor_address="Cùng địa chỉ",
+        )
+        for i in range(4)
+    ]
+    result = plan_assignments(tickets, [rule])
+
+    assert len({item.assignees for item in result}) == 1
+    assert all(item.cohort_key for item in result)

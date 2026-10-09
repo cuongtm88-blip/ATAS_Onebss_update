@@ -30,6 +30,7 @@ def plan_assignments(
     cohort_assignees: dict[str, str] | None = None,
     cohort_conflicts: dict[str, str] | None = None,
     manual_assignees: dict[str, str] | None = None,
+    service_assignments: dict[str, dict[str, str]] | None = None,
 ) -> list[Assignment]:
     scores = {
         normalize(name): Decimal(str(value))
@@ -139,6 +140,26 @@ def plan_assignments(
     last_pick: dict[tuple[str, tuple[str, ...]], int] = {}
     preferred_assignees = preferred_assignees or {}
     manual_assignees = manual_assignees or {}
+    service_assignments = service_assignments or {}
+    percentage_services = {
+        normalize(name) for name in (
+            "B-FONE", "SIP", "Điện thoại cố định", "Thuê bao POTS",
+            "1800-1900",
+        )
+    }
+    service_counts: dict[str, dict[str, int]] = {}
+    service_identities: dict[str, set[str]] = {}
+    for service_name, owners in service_assignments.items():
+        service_key = normalize(service_name)
+        counts = service_counts.setdefault(service_key, {})
+        identities = service_identities.setdefault(service_key, set())
+        for identity, owner in owners.items():
+            identities.add(identity)
+            owner_key = normalize(owner)
+            counts[owner_key] = counts.get(owner_key, 0) + 1
+
+    def uses_percentage_routing(rule: ServiceRule) -> bool:
+        return normalize(rule.sheet_service or rule.service) in percentage_services
     current_sheet_keys = (
         sheet_existing_keys
         if sheet_existing_keys is not None
@@ -162,6 +183,7 @@ def plan_assignments(
         try:
             seed_rule = match_rule(rules, ticket)
         except RuleError:
+            seed_rule = None
             is_giam_sat = (
                 normalize(ticket.service_type or ticket.service)
                 == normalize("Voice Brandname")
@@ -170,6 +192,8 @@ def plan_assignments(
         else:
             is_giam_sat = voice_brandname_mode(seed_rule, ticket) == "giam_sat"
         if is_giam_sat:
+            continue
+        if seed_rule is not None and uses_percentage_routing(seed_rule):
             continue
         key = assignment_cohort_key(
             ticket.customer_name, ticket.labor_address,
@@ -294,7 +318,8 @@ def plan_assignments(
                 sheet_reassignment = False
         eligible_count = sum(len(members) for members in groups.values())
         cohort_key = (
-            "" if manual_assignee or voice_mode == "giam_sat" else assignment_cohort_key(
+            "" if manual_assignee or voice_mode == "giam_sat"
+            or uses_percentage_routing(rule) else assignment_cohort_key(
                 ticket.customer_name, ticket.labor_address,
                 ticket.service_type or ticket.service,
             )
@@ -359,7 +384,46 @@ def plan_assignments(
                 cohort_pins[cohort_key] = selected
             assignees.append(selected)
         else:
-            if any(member.target_share is not None for member in rule.members):
+            if uses_percentage_routing(rule) and any(
+                member.target_share is not None for member in rule.members
+            ):
+                eligible = list(dict.fromkeys(
+                    name for members in groups.values() for name in members
+                ))
+                shares: dict[str, Decimal] = {}
+                for member in rule.members:
+                    key = normalize(member.name)
+                    if member.target_share is not None:
+                        shares[key] = max(
+                            shares.get(key, Decimal(0)), member.target_share
+                        )
+                weighted = [
+                    name for name in eligible if shares.get(normalize(name), 0) > 0
+                ]
+                if not weighted:
+                    weighted = eligible
+                    shares = {normalize(name): Decimal(1) for name in weighted}
+                service_key = normalize(rule.sheet_service or rule.service)
+                counts = service_counts.setdefault(service_key, {})
+                lowest = min(
+                    Decimal(counts.get(normalize(name), 0))
+                    / shares[normalize(name)]
+                    for name in weighted
+                )
+                tied = [
+                    name for name in weighted
+                    if Decimal(counts.get(normalize(name), 0))
+                    / shares[normalize(name)] == lowest
+                ]
+                pick_key = (
+                    f"percentage:{service_key}",
+                    tuple(normalize(name) for name in weighted),
+                )
+                cursor = last_pick.get(pick_key, -1) + 1
+                selected = tied[cursor % len(tied)]
+                last_pick[pick_key] = cursor
+                assignees.append(selected)
+            elif any(member.target_share is not None for member in rule.members):
                 candidates = list(dict.fromkeys(
                     name for members in groups.values() for name in members
                 ))
@@ -396,5 +460,15 @@ def plan_assignments(
                 group_key = member_score_key(group, assignee) if group else ""
                 key = group_key if group_key in scores else normalize(assignee)
                 scores[key] = scores.get(key, Decimal(0)) + share
+        if uses_percentage_routing(rule):
+            service_key = normalize(rule.sheet_service or rule.service)
+            identity = ticket_identity(ticket.transaction_id, ticket.subscriber_id)
+            identities = service_identities.setdefault(service_key, set())
+            if identity not in identities:
+                counts = service_counts.setdefault(service_key, {})
+                for assignee in assignees:
+                    key = normalize(assignee)
+                    counts[key] = counts.get(key, 0) + 1
+                identities.add(identity)
         result.append(assignment)
     return result

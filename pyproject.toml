@@ -1,6 +1,6 @@
 [project]
 name = "ats-onebss"
-version = "0.9.39"
+version = "0.9.40"
 description = "Tự động cân bằng điểm, giao phiếu OneBSS và ghi Google Sheets"
 requires-python = ">=3.11"
 dependencies = [

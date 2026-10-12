@@ -476,6 +476,12 @@ class ATSOneBSSWindow(QMainWindow):
             self.region_combo.addItem(f"{region.name}{suffix}")
             self.region_by_index.append(region)
         region_row.addWidget(self.region_combo)
+        self.default_region_button = QPushButton("Đặt miền này làm mặc định")
+        self.default_region_button.setToolTip(
+            "Lưu miền đang chọn để ATS OneBSS tự mở miền này khi khởi động."
+        )
+        self.default_region_button.clicked.connect(self._set_default_region)
+        region_row.addWidget(self.default_region_button)
         region_row.addSpacing(14)
         region_row.addWidget(QLabel("Chu kỳ:"))
         self.cycle_minutes = QSpinBox()
@@ -725,6 +731,9 @@ class ATSOneBSSWindow(QMainWindow):
         page.addWidget(splitter, 1)
 
         self.region_combo.currentIndexChanged.connect(self._on_region_changed)
+        self.region_combo.currentIndexChanged.connect(
+            lambda _index: self._update_default_region_button()
+        )
         self.login_button.clicked.connect(lambda: self._start("login"))
         self.finish_login_button.clicked.connect(self._finish_login)
         self.plan_button.clicked.connect(lambda: self._start("plan"))
@@ -783,8 +792,16 @@ class ATSOneBSSWindow(QMainWindow):
         temp_path.replace(self.settings_path)
 
     def _select_initial_region(self) -> None:
-        wanted = str(self.settings.get("last_region", self.catalog.default_region))
-        first_launch = "last_region" not in self.settings
+        wanted = str(
+            self.settings.get(
+                "default_region",
+                self.settings.get("last_region", self.catalog.default_region),
+            )
+        )
+        first_launch = (
+            "last_region" not in self.settings
+            and "default_region" not in self.settings
+        )
         enabled_regions = [region for region in self.region_by_index if region.enabled]
         if first_launch and len(enabled_regions) > 1:
             labels = [region.name for region in enabled_regions]
@@ -807,6 +824,7 @@ class ATSOneBSSWindow(QMainWindow):
                     enabled_regions[default_index],
                 )
                 wanted = selected_region.key
+        self.settings.setdefault("default_region", wanted)
         index = next(
             (
                 item_index
@@ -821,8 +839,32 @@ class ATSOneBSSWindow(QMainWindow):
         )
         self.region_combo.setCurrentIndex(index)
         self._load_region(self.region_by_index[index])
+        self._update_default_region_button()
         if first_launch:
             self._save_settings()
+
+    def _update_default_region_button(self) -> None:
+        region = self._selected_region()
+        is_default = bool(
+            region and region.key == self.settings.get("default_region")
+        )
+        self.default_region_button.setText(
+            "Đang là miền mặc định" if is_default else "Đặt miền này làm mặc định"
+        )
+        self.default_region_button.setEnabled(
+            not is_default and bool(region and region.enabled)
+            and self.process.state() == QProcess.NotRunning
+            and not self._update_busy
+        )
+
+    def _set_default_region(self) -> None:
+        region = self._selected_region()
+        if not region or not region.enabled:
+            return
+        self.settings["default_region"] = region.key
+        self._save_settings()
+        self._update_default_region_button()
+        self.status_label.setText(f"Mặc định: {region.name}")
 
     def _selected_region(self) -> Region | None:
         index = self.region_combo.currentIndex()
@@ -1816,6 +1858,7 @@ class ATSOneBSSWindow(QMainWindow):
             running and self.process_mode == "login"
         )
         self.region_combo.setEnabled(idle)
+        self._update_default_region_button()
         self.member_list.setEnabled(idle)
         self.cycle_minutes.setEnabled(enabled_region and idle)
         self.update_rules_button.setEnabled(enabled_region and idle)

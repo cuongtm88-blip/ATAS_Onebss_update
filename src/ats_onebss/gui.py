@@ -1135,6 +1135,7 @@ class ATSOneBSSWindow(QMainWindow):
                 backup_path,
                 target,
                 script_directory=user_data_root() / "updates",
+                version=release.version,
             )
         except Exception as install_error:
             self._append_log(f"Không thể khởi chạy trình cài bản mới: {install_error}")

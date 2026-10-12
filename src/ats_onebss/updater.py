@@ -369,6 +369,15 @@ def stage_update(archive: Path, target: InstallTarget, version: str) -> tuple[Pa
             if len(candidates) != 1:
                 raise UpdateError("Gói Windows không chứa đúng một thư mục ứng dụng hợp lệ.")
             staged_app = candidates[0]
+            version_file = staged_app / "VERSION.txt"
+            try:
+                packaged_version = version_file.read_text(encoding="ascii").strip()
+            except (OSError, UnicodeDecodeError) as error:
+                raise UpdateError("Gói Windows thiếu tệp xác minh phiên bản.") from error
+            if packaged_version != version:
+                raise UpdateError(
+                    f"Gói Windows chứa phiên bản {packaged_version}, cần cài {version}."
+                )
         backup = target.target_path.with_name(
             f"{target.target_path.name}.backup-{version}-{uuid.uuid4().hex[:8]}"
         )
@@ -384,6 +393,7 @@ def launch_installer(
     target: InstallTarget,
     parent_pid: int | None = None,
     script_directory: Path | None = None,
+    version: str = "",
 ) -> Path:
     """Start an OS helper that swaps the app after this process exits."""
     parent_pid = parent_pid or os.getpid()
@@ -418,17 +428,37 @@ def launch_installer(
             close_fds=True,
         )
     elif target.platform_name == "win32":
-        content = r'''param([int]$ParentPid, [string]$Staged, [string]$Target, [string]$Backup)
+        log_path = script.with_name(f"{script.stem}-{version}.log")
+        content = r'''param([int]$ParentPid, [string]$Staged, [string]$Target, [string]$Backup, [string]$Version, [string]$Log)
+$ErrorActionPreference = "Stop"
+$NewMoved = $false
+function Write-UpdateLog([string]$Message) {
+    Add-Content -LiteralPath $Log -Value "$(Get-Date -Format o) $Message" -Encoding UTF8
+}
+Write-UpdateLog "Bắt đầu cập nhật $Version. Target=$Target; staged=$Staged"
 while (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }
-if (Test-Path -LiteralPath $Target) { Move-Item -LiteralPath $Target -Destination $Backup }
 try {
+    if (!(Test-Path -LiteralPath (Join-Path $Staged 'ATS-OneBSS.exe'))) { throw "Gói giải nén thiếu ATS-OneBSS.exe" }
+    if ((Get-Content -LiteralPath (Join-Path $Staged 'VERSION.txt') -Raw).Trim() -ne $Version) { throw "Sai phiên bản trong thư mục tạm" }
+    if (Test-Path -LiteralPath $Target) { Move-Item -LiteralPath $Target -Destination $Backup; Write-UpdateLog "Đã chuyển bản cũ sang $Backup" }
     Move-Item -LiteralPath $Staged -Destination $Target
+    $NewMoved = $true
+    if (!(Test-Path -LiteralPath (Join-Path $Target 'ATS-OneBSS.exe'))) { throw "Không tìm thấy executable sau khi thay thế" }
+    if ((Get-Content -LiteralPath (Join-Path $Target 'VERSION.txt') -Raw).Trim() -ne $Version) { throw "Phiên bản đích sau thay thế không khớp" }
+    Write-UpdateLog "Đã cài phiên bản $Version vào $Target"
 } catch {
-    if (Test-Path -LiteralPath $Backup) { Move-Item -LiteralPath $Backup -Destination $Target }
+    Write-UpdateLog "LỖI: $($_.Exception.ToString())"
+    if (Test-Path -LiteralPath $Backup) {
+        if (Test-Path -LiteralPath $Target) { Remove-Item -LiteralPath $Target -Recurse -Force }
+        Move-Item -LiteralPath $Backup -Destination $Target
+        Write-UpdateLog "Đã khôi phục bản sao lưu"
+    }
+    if (Test-Path -LiteralPath (Join-Path $Target 'ATS-OneBSS.exe')) { Start-Process -FilePath (Join-Path $Target 'ATS-OneBSS.exe') }
     exit 2
 }
 Remove-Item -LiteralPath (Split-Path -Parent $Staged) -Force -ErrorAction SilentlyContinue
 Start-Process -FilePath (Join-Path $Target 'ATS-OneBSS.exe')
+Write-UpdateLog "Đã mở ATS OneBSS $Version"
 '''
         script.write_text(content, encoding="utf-8")
         subprocess.Popen(
@@ -437,6 +467,7 @@ Start-Process -FilePath (Join-Path $Target 'ATS-OneBSS.exe')
                 "-ExecutionPolicy", "Bypass", "-File", str(script),
                 "-ParentPid", str(parent_pid), "-Staged", str(staged_app),
                 "-Target", str(target.target_path), "-Backup", str(backup_path),
+                "-Version", version, "-Log", str(log_path),
             ],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,

@@ -57,6 +57,6 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Sửa thao tác dán dữ liệu Google Sheet trên Windows.
-            - Chờ OneBSS cập nhật trạng thái checkbox và nhiệm vụ trước khi tiếp tục.
+            - Ghi lại kết quả cập nhật Windows và xác minh đúng phiên bản sau khi thay thế.
+            - Khôi phục bản sao lưu nếu thay thế thất bại.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

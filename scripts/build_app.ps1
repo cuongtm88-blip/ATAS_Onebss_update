@@ -27,4 +27,7 @@ uv run pyinstaller `
   --add-data "assets/vinaphone-logo.png;assets" `
   src/ats_onebss/gui_main.py
 
+$version = uv run python -c "from ats_onebss import __version__; print(__version__)"
+Set-Content -LiteralPath "dist/ATS-OneBSS/VERSION.txt" -Value $version -NoNewline -Encoding ascii
+
 Write-Host "Đã tạo ứng dụng trong dist/ATS-OneBSS"

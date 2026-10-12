@@ -2385,7 +2385,14 @@ class GoogleSheetClient:
             )
             await page.wait_for_selector("#docs-editor")
             await page.wait_for_timeout(800)
+            await page.bring_to_front()
             name_box = await _visible(page.locator("#t-name-box"))
+            # The range in the URL can update the name box without giving the
+            # grid keyboard focus. Commit the address explicitly so paste goes
+            # into the selected cell rather than being dropped by Sheets.
+            await name_box.fill(f"A{start_row}")
+            await name_box.press("Enter")
+            await page.wait_for_timeout(250)
             if await name_box.input_value() != f"A{start_row}":
                 raise RuntimeError(
                     f"Google Sheet không có hàng {start_row}; cần bổ sung thêm hàng"

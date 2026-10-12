@@ -204,13 +204,29 @@ def _sheet_text_input(value: str) -> str:
     return f"'{value}" if value else ""
 
 
+def _parse_sheet_timestamp(value: str) -> datetime | None:
+    """Parse assignment timestamps as emitted by Sheets, with or without seconds."""
+    cleaned = value.strip()
+    for date_format in ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S"):
+        try:
+            return datetime.strptime(cleaned, date_format)
+        except ValueError:
+            pass
+    return None
+
+
+def _canonical_sheet_timestamp(value: str) -> str:
+    parsed = _parse_sheet_timestamp(value)
+    return parsed.strftime("%d/%m/%Y %H:%M") if parsed else value.strip()
+
+
 def _sheet_assignment_key(
     timestamp: str, row: list[str], columns: tuple[str, ...],
 ) -> tuple[str, str, str, str, str]:
     """Identify one assignment independently of mutable or Sheets-formatted fields."""
     values = dict(zip(columns, row, strict=True))
     return (
-        timestamp.strip(),
+        _canonical_sheet_timestamp(timestamp),
         values["transaction_id"].strip(),
         _sheet_subscriber_key(values["subscriber_id"]),
         normalize(values["service"]),
@@ -231,9 +247,7 @@ def _is_sheet_data_row(row: list[str]) -> bool:
     """Identify an assignment row independently of compacted CSV row numbers."""
     if len(row) < 5 or not row[1].strip() or not row[4].strip():
         return False
-    try:
-        datetime.strptime(row[0].strip(), "%d/%m/%Y %H:%M")
-    except ValueError:
+    if _parse_sheet_timestamp(row[0]) is None:
         return False
     return True
 
@@ -247,7 +261,8 @@ def _sheet_assignment_index(
         for row in rows:
             if not _is_sheet_data_row(row):
                 continue
-            assigned_at = datetime.strptime(row[0].strip(), "%d/%m/%Y %H:%M")
+            assigned_at = _parse_sheet_timestamp(row[0])
+            assert assigned_at is not None
             identity = ticket_identity(row[1], _sheet_subscriber_key(row[2]))
             assignee = row[4].strip()
             current = latest.get(identity)
@@ -271,9 +286,8 @@ def _sheet_service_assignment_index(
             continue
         if normalize(row[3]) != wanted_service:
             continue
-        try:
-            assigned_at = datetime.strptime(row[0].strip(), "%d/%m/%Y %H:%M")
-        except ValueError:
+        assigned_at = _parse_sheet_timestamp(row[0])
+        if assigned_at is None:
             continue
         identity = ticket_identity(row[1], _sheet_subscriber_key(row[2]))
         current = latest.get(identity)

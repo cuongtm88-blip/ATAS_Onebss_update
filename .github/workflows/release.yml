@@ -57,5 +57,5 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Chuyển tiếp đúng phiên bản qua trình cài đặt khi nâng cấp tự động.
+            - Nhận diện thời gian Google Sheets có cả giây khi xác nhận dòng đã ghi.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

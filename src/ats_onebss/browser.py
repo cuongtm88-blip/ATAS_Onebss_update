@@ -15,7 +15,7 @@ from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 from playwright.async_api import BrowserContext, Locator, Page, async_playwright
@@ -2473,10 +2473,28 @@ class GoogleSheetClient:
     async def export_rows(self, sheet_name: str | None = None) -> list[list[str]]:
         """Read the configured tab through Google's authenticated CSV view."""
         assert self.session.context
+        page = self.page or await self.open()
+        sheet_name = sheet_name or self.session.config.sheet_name
+        wanted = normalize(sheet_name)
+        active_name = page.locator(
+            ".docs-sheet-active-tab .docs-sheet-tab-name"
+        )
+        if (
+            not await active_name.count()
+            or normalize(await active_name.first.inner_text()) != wanted
+        ):
+            await self.activate_sheet(sheet_name)
+        parts = urlsplit(page.url)
+        gid = (
+            parse_qs(parts.query).get("gid", [""])[0]
+            or parse_qs(parts.fragment).get("gid", [""])[0]
+        )
+        if not gid:
+            raise RuntimeError(f"Không xác định được gid của tab {sheet_name}")
         sheet_id = self.session.config.sheet_url.split("/d/", 1)[1].split("/", 1)[0]
         url = (
-            f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq"
-            f"?tqx=out:csv&sheet={quote(sheet_name or self.session.config.sheet_name)}"
+            f"https://docs.google.com/spreadsheets/d/{sheet_id}/export"
+            f"?format=csv&gid={gid}"
             f"&_={time.time_ns()}"
         )
         response = await self.session.context.request.get(url)

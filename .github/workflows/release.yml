@@ -57,5 +57,5 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Sửa cập nhật Windows không thay được thư mục ứng dụng do tiến trình cài đặt kế thừa thư mục làm việc đang bị khóa.
+            - Xác nhận dòng Google Sheet bằng CSV export theo gid, tránh GViz trả thiếu dữ liệu phiếu.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

@@ -474,6 +474,7 @@ Write-UpdateLog "Đã mở ATS OneBSS $Version"
             stderr=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             close_fds=True,
+            cwd=script_directory,
         )
     else:
         raise UpdateError("Hệ điều hành này chưa hỗ trợ cài gói cập nhật.")

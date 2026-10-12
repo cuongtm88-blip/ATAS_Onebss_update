@@ -57,5 +57,5 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Nhận diện thời gian Google Sheets có cả giây khi xác nhận dòng đã ghi.
+            - Sửa cập nhật Windows không thay được thư mục ứng dụng do tiến trình cài đặt kế thừa thư mục làm việc đang bị khóa.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

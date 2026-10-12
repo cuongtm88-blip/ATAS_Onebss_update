@@ -1102,7 +1102,10 @@ class ATSOneBSSWindow(QMainWindow):
         def download_and_stage() -> None:
             try:
                 archive = download_asset(release, user_data_root() / "updates")
-                result = stage_update(archive, target, release.version)
+                staged_app, backup_path = stage_update(
+                    archive, target, release.version
+                )
+                result = (staged_app, backup_path, release.version)
                 self.update_signals.staged.emit(result, "")
             except Exception as stage_error:
                 self.update_signals.staged.emit(None, str(stage_error))
@@ -1121,13 +1124,13 @@ class ATSOneBSSWindow(QMainWindow):
             self.update_version_button.setText("Kiểm tra phiên bản")
             self._set_process_controls(self.process.state() != QProcess.NotRunning)
             return
-        if not isinstance(result, tuple) or len(result) != 2:
+        if not isinstance(result, tuple) or len(result) != 3:
             self._update_busy = False
             self.update_version_button.setText("Kiểm tra phiên bản")
             self._set_process_controls(self.process.state() != QProcess.NotRunning)
             QMessageBox.critical(self, "Lỗi cập nhật", "Không nhận được gói cài đặt hợp lệ.")
             return
-        staged_app, backup_path = result
+        staged_app, backup_path, version = result
         try:
             target = detect_install_target()
             launch_installer(
@@ -1135,7 +1138,7 @@ class ATSOneBSSWindow(QMainWindow):
                 backup_path,
                 target,
                 script_directory=user_data_root() / "updates",
-                version=release.version,
+                version=version,
             )
         except Exception as install_error:
             self._append_log(f"Không thể khởi chạy trình cài bản mới: {install_error}")

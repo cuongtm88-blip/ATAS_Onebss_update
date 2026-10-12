@@ -57,5 +57,5 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Định tuyến Voice Brandname theo nhân sự trong quy tắc Excel của miền đang chạy.
+            - Chuyển tiếp đúng phiên bản qua trình cài đặt khi nâng cấp tự động.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

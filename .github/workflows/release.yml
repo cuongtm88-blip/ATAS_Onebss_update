@@ -57,7 +57,6 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Thêm Miền Nam với quy tắc giao phiếu, Google Sheet và hệ số điểm dự án 1,2.
-            - Lần mở đầu tiên cho phép chọn miền mặc định.
-            - Dùng tên ASCII cho workbook runtime để cập nhật ổn định trên macOS.
+            - Sửa thao tác dán dữ liệu Google Sheet trên Windows.
+            - Chờ OneBSS cập nhật trạng thái checkbox và nhiệm vụ trước khi tiếp tục.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

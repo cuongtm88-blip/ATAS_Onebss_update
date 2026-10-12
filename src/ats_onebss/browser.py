@@ -555,13 +555,26 @@ async def _visible(locator: Locator, timeout_ms: int = 30_000) -> Locator:
 
 
 async def _set_hidden_checkbox(checkbox: Locator, checked: bool) -> None:
-    """Toggle a Syncfusion checkbox whose native input is off-screen."""
-    await checkbox.evaluate(
-        "(element, wanted) => { if (element.checked !== wanted) element.click(); }",
-        checked,
-    )
-    if await checkbox.is_checked() != checked:
-        raise RuntimeError("OneBSS không cập nhật trạng thái checkbox")
+    """Toggle a Syncfusion checkbox and wait for its state to settle."""
+    if await checkbox.is_checked() == checked:
+        return
+    try:
+        if checked:
+            await checkbox.check(force=True, timeout=5_000)
+        else:
+            await checkbox.uncheck(force=True, timeout=5_000)
+    except Exception:
+        # Syncfusion may hide the native input behind its visible frame.
+        if await checkbox.is_checked() != checked:
+            frame = checkbox.locator("xpath=..").locator(".e-frame")
+            if await frame.count():
+                await frame.click(timeout=5_000)
+    deadline = asyncio.get_running_loop().time() + 5
+    while asyncio.get_running_loop().time() < deadline:
+        if await checkbox.is_checked() == checked:
+            return
+        await asyncio.sleep(0.1)
+    raise RuntimeError("OneBSS không cập nhật trạng thái checkbox")
 
 
 async def _row_with_normalized_text(rows: Locator, wanted: str, timeout_ms: int) -> Locator:
@@ -751,6 +764,14 @@ async def _visible_employee_grid(page: Page, timeout_ms: int) -> tuple[Locator, 
                 # more stable than Syncfusion header text during re-renders.
                 if await grid.locator(".vue-treeselect__input").count():
                     return dialog, grid
+                headers = normalize(" ".join(
+                    await grid.locator(".e-gridheader .e-headertext").all_inner_texts()
+                ))
+                if "nhân viên" in headers and "nhiệm vụ" in headers:
+                    rows = grid.locator(".e-gridcontent tr.e-row")
+                    filters = grid.locator(".e-filterbar input.e-input")
+                    if await rows.count() and await filters.count() >= 2:
+                        return dialog, grid
         await asyncio.sleep(0.25)
     raise RuntimeError("Không tìm thấy bảng nhân viên đang hiển thị")
 
@@ -1690,19 +1711,35 @@ class OneBSSClient:
                         employee_rows, assignee, self.session.config.timeout_ms
                     )
                     tree_input = row.locator(".vue-treeselect__input")
+                    await tree_input.wait_for(
+                        state="visible", timeout=self.session.config.timeout_ms
+                    )
                     await tree_input.click()
                     portal = self.page.locator(
                         ".vue-treeselect__portal-target.vue-treeselect--open"
                     )
-                    await portal.first.wait_for(state="attached", timeout=5_000)
+                    await portal.first.wait_for(
+                        state="attached", timeout=self.session.config.timeout_ms
+                    )
                     await tree_input.fill(self.session.config.task)
                     task_label = await _visible(
                         portal.get_by_text(self.session.config.task, exact=True),
-                        timeout_ms=8_000,
+                        timeout_ms=self.session.config.timeout_ms,
                     )
-                    await task_label.hover()
-                    await tree_input.press("Enter")
-                deadline = asyncio.get_running_loop().time() + 8
+                    try:
+                        await task_label.click(timeout=5_000)
+                    except Exception:
+                        # Some OneBSS builds replace the option on pointer
+                        # movement; hover it and commit the highlighted item.
+                        if not await _row_has_selected_task(
+                            employee_rows, assignee, self.session.config.task
+                        ):
+                            await task_label.hover()
+                            await tree_input.press("Enter")
+                deadline = (
+                    asyncio.get_running_loop().time()
+                    + self.session.config.timeout_ms / 1000
+                )
                 while asyncio.get_running_loop().time() < deadline:
                     if await _row_has_selected_task(
                         employee_rows, assignee, self.session.config.task
@@ -2029,21 +2066,28 @@ class OneBSSClient:
                     portal = self.page.locator(
                         ".vue-treeselect__portal-target.vue-treeselect--open"
                     )
-                    await portal.first.wait_for(state="attached", timeout=5_000)
+                    await portal.first.wait_for(
+                        state="attached", timeout=self.session.config.timeout_ms
+                    )
                     await tree_input.fill(self.session.config.task)
-                    # Typing filters the tree to the exact task. Select it by
-                    # keyboard so Vue receives trusted input events and no
-                    # detached option node is clicked.
+                    # Typing filters the tree to the exact task. Wait for its
+                    # visible option before committing it to the employee row.
                     task_label = await _visible(
                         portal.get_by_text(self.session.config.task, exact=True),
-                        timeout_ms=8_000,
+                        timeout_ms=self.session.config.timeout_ms,
                     )
-                    # Hovering the exact result makes it the highlighted tree
-                    # option; Enter then commits that option without clicking
-                    # a DOM node that Vue is about to replace.
-                    await task_label.hover()
-                    await tree_input.press("Enter")
-                    deadline = asyncio.get_running_loop().time() + 8
+                    try:
+                        await task_label.click(timeout=5_000)
+                    except Exception:
+                        if not await _row_has_selected_task(
+                            employee_rows, assignee, self.session.config.task
+                        ):
+                            await task_label.hover()
+                            await tree_input.press("Enter")
+                    deadline = (
+                        asyncio.get_running_loop().time()
+                        + self.session.config.timeout_ms / 1000
+                    )
                     while asyncio.get_running_loop().time() < deadline:
                         if await _row_has_selected_task(
                             employee_rows, assignee, self.session.config.task
@@ -2353,7 +2397,7 @@ class GoogleSheetClient:
                 for row in sheet_rows
             )
             await page.evaluate("text => navigator.clipboard.writeText(text)", tsv)
-            await page.keyboard.press("Meta+V")
+            await page.keyboard.press("Control+V" if os.name == "nt" else "Meta+V")
 
             # Verify only the rows pasted in this attempt. A failed/partial
             # paste is retried at the newly calculated first free row, so a
@@ -2516,7 +2560,7 @@ class GoogleSheetClient:
                 await page.evaluate(
                     "text => navigator.clipboard.writeText(text)", new_assignee
                 )
-                await page.keyboard.press("Meta+V")
+                await page.keyboard.press("Control+V" if os.name == "nt" else "Meta+V")
                 await page.keyboard.press("Enter")
 
             deadline = asyncio.get_running_loop().time() + 10

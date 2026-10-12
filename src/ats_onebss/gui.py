@@ -103,7 +103,7 @@ RESOURCE_FILES = (
     "Giao phiếu_demo2.xlsx",
     "MN/config.toml",
     "MN/project_rules_MN.toml",
-    "MN/Giao phiếu_demo2_MN.xlsx",
+    "MN/Giao_phieu_MN.xlsx",
 )
 
 

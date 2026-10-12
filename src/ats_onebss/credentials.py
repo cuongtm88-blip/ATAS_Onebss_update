@@ -67,6 +67,35 @@ def _dpapi(data: bytes, protect: bool) -> bytes:
         ctypes.windll.kernel32.LocalFree(output.pbData)
 
 
+def save_protected_value(region_key: str, name: str, value: str) -> None:
+    """Store an additional secret using the platform credential store."""
+    if not value:
+        raise CredentialStoreError("Giá trị bảo mật không được để trống.")
+    if os.name == "nt":
+        path = _windows_path(region_key).with_name(
+            _windows_path(region_key).stem + f"-{name}.dat"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_bytes(_dpapi(value.encode("utf-8"), True))
+        temporary.replace(path)
+    else:
+        raise CredentialStoreError("Lưu dữ liệu bảo mật được hỗ trợ trên Windows.")
+
+
+def load_protected_value(region_key: str, name: str) -> str:
+    if os.name == "nt":
+        base = _windows_path(region_key)
+        path = base.with_name(base.stem + f"-{name}.dat")
+        if not path.is_file():
+            return ""
+        try:
+            return _dpapi(path.read_bytes(), False).decode("utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise CredentialStoreError("Không đọc được dữ liệu bảo mật đã mã hóa.") from error
+    return ""
+
+
 def save_credentials(region_key: str, username: str, password: str) -> None:
     user = username.strip()
     if not user or not password:

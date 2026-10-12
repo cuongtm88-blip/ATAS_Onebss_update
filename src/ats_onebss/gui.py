@@ -635,7 +635,7 @@ class ATSOneBSSWindow(QMainWindow):
         telegram_help = QLabel(
             "Gửi cảnh báo khi phiên OneBSS sắp hết hạn hoặc đã hết hạn, "
             "chu kỳ gặp lỗi, hay tiến trình dừng bất thường. "
-            "Bot Token được lưu trong Keychain macOS, không ghi vào file cấu hình. "
+            "Bot Token được lưu trong kho bảo mật của hệ điều hành, không ghi vào file cấu hình. "
             "Trên macOS, gửi /resume để khởi động lại từ xa; chỉ Chat ID đã cấu hình được phép."
         )
         telegram_help.setWordWrap(True)

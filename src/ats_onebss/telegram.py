@@ -13,6 +13,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from .credentials import (
+    CredentialStoreError,
+    load_protected_value,
+    save_protected_value,
+)
+
 
 TELEGRAM_TOKEN_ENV = "ATS_ONEBSS_TELEGRAM_TOKEN"
 TELEGRAM_CHAT_ID_ENV = "ATS_ONEBSS_TELEGRAM_CHAT_ID"
@@ -34,13 +40,17 @@ def keychain_service(region_key: str) -> str:
 
 def save_bot_token(region_key: str, token: str) -> None:
     """Store a Telegram bot token outside the JSON/config files."""
-    if sys.platform != "darwin":
-        raise TelegramError(
-            "Bản hiện tại chỉ hỗ trợ lưu Telegram token trong Keychain macOS."
-        )
     value = token.strip()
     if not value:
         raise TelegramError("Telegram Bot Token không được để trống.")
+    if os.name == "nt":
+        try:
+            save_protected_value(region_key, "telegram-token", value)
+        except CredentialStoreError as error:
+            raise TelegramError(str(error)) from error
+        return
+    if sys.platform != "darwin":
+        raise TelegramError("Lưu Telegram token được hỗ trợ trên macOS và Windows.")
     result = subprocess.run(
         [
             "/usr/bin/security",
@@ -63,6 +73,11 @@ def save_bot_token(region_key: str, token: str) -> None:
 
 
 def load_bot_token(region_key: str) -> str:
+    if os.name == "nt":
+        try:
+            return load_protected_value(region_key, "telegram-token")
+        except CredentialStoreError as error:
+            raise TelegramError(str(error)) from error
     if sys.platform != "darwin":
         return ""
     result = subprocess.run(

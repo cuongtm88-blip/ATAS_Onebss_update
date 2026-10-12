@@ -245,8 +245,9 @@ def plan_assignments(
                 continue
         voice_mode = voice_brandname_mode(rule, ticket)
         # The current VIP state is stronger than Sheet history for supervision.
-        # A returned Giam sat ticket must always go to Le Duc Tuan. Replays are
-        # still appended as a new row and marked so they do not affect the score.
+        # A returned Giam sat ticket must follow the matched regional rule.
+        # Replays are still appended as a new row and marked so they do not
+        # affect the score.
         # Xu ly keeps the original Sheet assignee when present.
         if manual_assignee:
             groups = {"Chỉ định thủ công": [manual_assignee]}
@@ -308,15 +309,16 @@ def plan_assignments(
         if not manual_assignee:
             sheet_reassignment = sheet_existing
         if not manual_assignee and voice_mode in {"xu_ly", "giam_sat"}:
-            # For Voice Brandname, the old mode is inferred from its saved
-            # assignee: Lê Đức Tuấn means Giam sat; anyone else means Xu ly.
-            # The replay marker is only meaningful when the VIP mode matches.
+            # The current matched Excel row defines the staff for this mode.
+            # Mark a replay only when its saved assignees are still valid under
+            # that same regional rule.
             if preferred:
-                previous_was_giam_sat = (
-                    normalize(preferred[0]) == normalize("Lê Đức Tuấn")
-                )
-                sheet_reassignment = sheet_existing and (
-                    previous_was_giam_sat == (voice_mode == "giam_sat")
+                current_mode_members = {
+                    normalize(member.name) for member in rule.members
+                }
+                sheet_reassignment = sheet_existing and all(
+                    normalize(assignee) in current_mode_members
+                    for assignee in preferred
                 )
             else:
                 sheet_reassignment = False

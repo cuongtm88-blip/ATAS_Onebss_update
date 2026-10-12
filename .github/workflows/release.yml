@@ -57,6 +57,5 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Ghi lại kết quả cập nhật Windows và xác minh đúng phiên bản sau khi thay thế.
-            - Khôi phục bản sao lưu nếu thay thế thất bại.
+            - Định tuyến Voice Brandname theo nhân sự trong quy tắc Excel của miền đang chạy.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

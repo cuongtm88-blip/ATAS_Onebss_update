@@ -581,27 +581,10 @@ def eligible_members(
     excluded_members: tuple[str, ...] = (),
 ) -> dict[str, list[str]]:
     excluded = {normalize(name) for name in excluded_members}
-    voice_mode = voice_brandname_mode(rule, ticket)
-    if voice_mode == "giam_sat":
-        selected_names = ["Lê Đức Tuấn"]
-        selected_names = [
-            name for name in selected_names if normalize(name) not in excluded
-        ]
-        if not selected_names:
-            raise RuleError("Lê Đức Tuấn đang được loại trừ do nghỉ phép")
-        return {"Nhóm 2": selected_names}
-    if voice_mode == "xu_ly":
-        selected_names = [
-            "Đỗ Thị Thu Trang", "Ngô Thùy Trang", "Nguyễn Thị Thu Trang",
-        ]
-        selected_names = [
-            name for name in selected_names if normalize(name) not in excluded
-        ]
-        if not selected_names:
-            raise RuleError(
-                "Toàn bộ nhân sự xử lý Voice Brandname đang nghỉ phép"
-            )
-        return {"Nhóm 2": selected_names}
+    # The matched Voice Brandname row already represents the current VIP mode.
+    # Keep its regional member list authoritative instead of routing to names
+    # that only belong to one region's workbook.
+    voice_brandname_mode(rule, ticket)
 
     selected = [
         member for member in rule.members

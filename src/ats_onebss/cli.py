@@ -248,7 +248,10 @@ async def collect_plan(
         for rule in rules for member in rule.members
     }
     for project in project_rules:
-        for name in (project.fixed_assignee, *(route.assignee for route in project.routes)):
+        for name in (
+            project.fixed_assignee, *project.fixed_assignees,
+            *(route.assignee for route in project.routes),
+        ):
             if name:
                 configured_names.setdefault(normalize(name), name)
     configured_unaccented: dict[str, list[str]] = {}
@@ -331,15 +334,20 @@ async def collect_plan(
                 else:
                     project = match_project_rule(project_rules, ticket)
                     if project:
-                        if normalize(project.assignee) in excluded:
+                        available = [
+                            name for name in project.assignees
+                            if normalize(name) not in excluded
+                        ]
+                        if not available:
                             ledger.remember_pending_project(
                                 ticket, project.project_name, project.assignee
                             )
                             raise RuleError(
-                                f"{project.project_name}: người phụ trách "
-                                f"{project.assignee} đang nghỉ phép"
+                                f"{project.project_name}: tất cả nhân sự phụ trách "
+                                "đang nghỉ phép"
                             )
-                        member_group(rules, project.assignee, rule)
+                        for assignee in available:
+                            member_group(rules, assignee, rule)
                     else:
                         eligible_members(
                             rule, ticket, config.use_backup_members,
@@ -810,6 +818,11 @@ async def process_reassignment_command(
         allowed_names.update(
             normalize(project.fixed_assignee)
             for project in project_rules if project.fixed_assignee
+        )
+        allowed_names.update(
+            normalize(name)
+            for project in project_rules
+            for name in project.fixed_assignees
         )
         if normalize(requested_assignee) not in allowed_names:
             raise RuntimeError(

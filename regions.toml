@@ -17,7 +17,7 @@ update_repository = "cuongtm88-blip/ATAS_Onebss_update_MienTrung"
 
 [regions.south]
 name = "Miền Nam"
-enabled = false
-config = "regions/south/config.toml"
-description = "Chưa có danh sách nhân sự và quy tắc giao phiếu."
+enabled = true
+config = "MN/config.toml"
+description = "Phiên bản đầu tiên: quy tắc, nhân sự và Google Sheet Miền Nam."
 update_repository = "cuongtm88-blip/ATAS_Onebss_update_MienNam"

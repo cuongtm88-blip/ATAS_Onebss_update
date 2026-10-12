@@ -42,12 +42,15 @@ class ProjectRule:
     route_field: str = ""
     routes: tuple[ProjectRoute, ...] = ()
     required_contains: tuple[tuple[str, str], ...] = ()
+    points_multiplier: Decimal = Decimal(1)
+    fixed_assignees: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class ProjectMatch:
     project_name: str
     assignee: str
+    assignees: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

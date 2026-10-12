@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHeaderView,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -100,6 +101,9 @@ RESOURCE_FILES = (
     "config.toml",
     "project_rules.toml",
     "Giao phiếu_demo2.xlsx",
+    "MN/config.toml",
+    "MN/project_rules_MN.toml",
+    "MN/Giao phiếu_demo2_MN.xlsx",
 )
 
 
@@ -143,7 +147,7 @@ def prepare_runtime_root() -> Path:
             wanted_name = unicodedata.normalize("NFC", source_file.name)
             try:
                 source_file = next(
-                    item for item in source.iterdir()
+                    item for item in source_file.parent.iterdir()
                     if unicodedata.normalize("NFC", item.name) == wanted_name
                 )
             except (FileNotFoundError, StopIteration):
@@ -176,20 +180,30 @@ def load_app_region_catalog(
     if not defaults_path.is_file():
         return catalog
     defaults = load_regions(defaults_path)
-    default_repositories = {
-        region.key: region.update_repository for region in defaults.regions
-    }
-    regions = tuple(
-        replace(
-            region,
-            update_repository=(
-                region.update_repository
-                or default_repositories.get(region.key, "")
-            ),
-        )
-        for region in catalog.regions
-    )
-    return RegionCatalog(catalog.root, catalog.default_region, regions)
+    default_regions = {region.key: region for region in defaults.regions}
+    regions = []
+    for region in catalog.regions:
+        packaged = default_regions.get(region.key)
+        updates = {
+            "update_repository": region.update_repository
+            or (packaged.update_repository if packaged else ""),
+        }
+        # A newly enabled region in an app update should become available to
+        # existing installs whose runtime catalog still has the old placeholder.
+        if packaged and packaged.enabled and not region.enabled:
+            try:
+                relative_config = packaged.config_path.relative_to(defaults.root)
+                runtime_config = catalog.root / relative_config
+            except ValueError:
+                runtime_config = region.config_path
+            if runtime_config.is_file():
+                updates.update(
+                    enabled=True,
+                    config_path=runtime_config,
+                    description=packaged.description or region.description,
+                )
+        regions.append(replace(region, **updates))
+    return RegionCatalog(catalog.root, catalog.default_region, tuple(regions))
 
 
 def install_rules_file(source: str | Path, target: str | Path) -> Path | None:
@@ -282,6 +296,8 @@ def region_member_names(region: Region) -> tuple[str, ...]:
             add(member.name)
     for project in load_project_rules(config.project_rules_file):
         add(project.fixed_assignee)
+        for name in project.fixed_assignees:
+            add(name)
         for route in project.routes:
             add(route.assignee)
     return tuple(result)
@@ -768,6 +784,29 @@ class ATSOneBSSWindow(QMainWindow):
 
     def _select_initial_region(self) -> None:
         wanted = str(self.settings.get("last_region", self.catalog.default_region))
+        first_launch = "last_region" not in self.settings
+        enabled_regions = [region for region in self.region_by_index if region.enabled]
+        if first_launch and len(enabled_regions) > 1:
+            labels = [region.name for region in enabled_regions]
+            default_index = next(
+                (i for i, region in enumerate(enabled_regions)
+                 if region.key == self.catalog.default_region),
+                0,
+            )
+            selected, accepted = QInputDialog.getItem(
+                self,
+                "Chọn miền mặc định",
+                "Chọn miền ATS OneBSS sẽ mở mặc định:",
+                labels,
+                default_index,
+                False,
+            )
+            if accepted:
+                selected_region = next(
+                    (region for region in enabled_regions if region.name == selected),
+                    enabled_regions[default_index],
+                )
+                wanted = selected_region.key
         index = next(
             (
                 item_index
@@ -782,6 +821,8 @@ class ATSOneBSSWindow(QMainWindow):
         )
         self.region_combo.setCurrentIndex(index)
         self._load_region(self.region_by_index[index])
+        if first_launch:
+            self._save_settings()
 
     def _selected_region(self) -> Region | None:
         index = self.region_combo.currentIndex()

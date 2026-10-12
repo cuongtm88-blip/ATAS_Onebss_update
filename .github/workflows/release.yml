@@ -1,4 +1,4 @@
-name: Build Miền Bắc release
+name: Release ATS OneBSS for macOS and Windows
 
 on:
   push:
@@ -56,3 +56,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
+          body: |
+            - Thêm Miền Nam với quy tắc giao phiếu, Google Sheet và hệ số điểm dự án 1,2.
+            - Lần mở đầu tiên cho phép chọn miền mặc định.
+            - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

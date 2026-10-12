@@ -1,0 +1,161 @@
+# Quy tắc dự án Miền Nam. Điểm các phiếu khớp dự án được nhân 1,2.
+[[projects]]
+name = "Đài THVN"
+priority = 100
+match_fields = ["subscriber_name"]
+contains = "Đài THVN"
+fixed_assignees = ["Nguyễn Thị Hoàng Khanh", "Cao Châu Phương Thảo"]
+points_multiplier = 1.2
+
+[[projects]]
+name = "Đài Phát Thanh - Truyền Hình Hà Nội"
+priority = 100
+match_fields = ["customer_name"]
+contains = "ĐÀI PHÁT THANH - TRUYỀN HÌNH HÀ NỘI"
+fixed_assignees = ["Nguyễn Thị Hoàng Khanh", "Cao Châu Phương Thảo"]
+points_multiplier = 1.2
+
+[[projects]]
+name = "Cục Quản Trị NHNN - Kênh phục vụ HNTH"
+priority = 95
+match_fields = ["customer_name"]
+contains = "Cục Quản Trị Ngân Hàng Nhà Nước Việt Nam"
+required_contains = { notes = "Kênh phục vụ HNTH" }
+fixed_assignees = ["Nguyễn Thị Hoàng Khanh", "Cao Châu Phương Thảo"]
+points_multiplier = 1.2
+
+[[projects]]
+name = "Nhóm dự án giao Nguyễn Thị Hoàng Khanh"
+priority = 90
+match_fields = ["subscriber_name"]
+contains = ["SCTV", "Sáng tạo truyền thông", "Masan", "Unilever", "Cyberlink"]
+fixed_assignee = "Nguyễn Thị Hoàng Khanh"
+points_multiplier = 1.2
+
+[[projects]]
+name = "Nhóm dự án giao Cao Châu Phương Thảo"
+priority = 90
+match_fields = ["subscriber_name"]
+contains = ["Mobifone", "Netnam", "GIẢI TRÍ VÀ THỂ THAO ĐIỆN TỬ", "Aeon", "EDT", "Chi nhánh Miền Bắc - Công ty cổ phần hạ tầng viễn thông CMC"]
+fixed_assignee = "Cao Châu Phương Thảo"
+points_multiplier = 1.2
+
+[[projects]]
+name = "Nhóm dự án giao Nguyễn Thị Quỳnh Hoa"
+priority = 90
+match_fields = ["subscriber_name"]
+contains = ["S-RETAIL", "SPX EXPRESS", "Flex Speed", "Foody", "Shopee"]
+fixed_assignee = "Nguyễn Thị Quỳnh Hoa"
+points_multiplier = 1.2
+
+[[projects]]
+name = "Dự án BCA"
+priority = 90
+match_fields = ["customer_name", "subscriber_name"]
+contains = ["Cục Viễn Thông & Cơ Yếu Bca", "CAP", "CAX", "Công An", "H04", "Pc10"]
+route_field = "labor_address"
+points_multiplier = 1.2
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Hoàng Khanh"
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+
+[[projects.routes]]
+assignee = "Cao Châu Phương Thảo"
+locations = ["Đồng Nai", "Vĩnh Long"]
+
+[[projects.routes]]
+assignee = "Phan Thị Kim Ngọc"
+locations = ["Cần Thơ", "Cà Mau"]
+
+[[projects.routes]]
+assignee = "Trần Thị Hải Yến"
+locations = ["Tây Ninh", "Đồng Tháp"]
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Quỳnh Hoa"
+locations = ["Lâm Đồng", "An Giang"]
+
+[[projects]]
+name = "Dự án Cục BĐTW"
+priority = 90
+match_fields = ["customer_name"]
+contains = ["Cục BĐTW", "Cục Bưu điện Trung ương"]
+route_field = "labor_address"
+points_multiplier = 1.2
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Hoàng Khanh"
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+
+[[projects.routes]]
+assignee = "Cao Châu Phương Thảo"
+locations = ["Đồng Nai", "Vĩnh Long"]
+
+[[projects.routes]]
+assignee = "Phan Thị Kim Ngọc"
+locations = ["Cần Thơ", "Cà Mau"]
+
+[[projects.routes]]
+assignee = "Trần Thị Hải Yến"
+locations = ["Tây Ninh", "Đồng Tháp"]
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Quỳnh Hoa"
+locations = ["Lâm Đồng", "An Giang"]
+
+[[projects]]
+name = "Dự án BTC"
+priority = 90
+match_fields = ["customer_name"]
+contains = ["Tổng Cục Dự Trữ Nhà Nước", "Tổng Cục Thuế", "Cục Công Nghệ Thông Tin & Thống Kê Hải Quan", "Tổng cục Hải quan", "Chi cục DTNN", "Bộ Tài Chính"]
+route_field = "labor_address"
+points_multiplier = 1.2
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Hoàng Khanh"
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+
+[[projects.routes]]
+assignee = "Cao Châu Phương Thảo"
+locations = ["Đồng Nai", "Vĩnh Long"]
+
+[[projects.routes]]
+assignee = "Phan Thị Kim Ngọc"
+locations = ["Cần Thơ", "Cà Mau"]
+
+[[projects.routes]]
+assignee = "Trần Thị Hải Yến"
+locations = ["Tây Ninh", "Đồng Tháp"]
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Quỳnh Hoa"
+locations = ["Lâm Đồng", "An Giang"]
+
+[[projects]]
+name = "Dự án BHXH"
+priority = 90
+match_fields = ["customer_name"]
+contains = ["Bảo Hiểm Xã Hội", "BHXH"]
+route_field = "labor_address"
+points_multiplier = 1.2
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Hoàng Khanh"
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+
+[[projects.routes]]
+assignee = "Cao Châu Phương Thảo"
+locations = ["Đồng Nai", "Vĩnh Long"]
+
+[[projects.routes]]
+assignee = "Phan Thị Kim Ngọc"
+locations = ["Cần Thơ", "Cà Mau"]
+
+[[projects.routes]]
+assignee = "Trần Thị Hải Yến"
+locations = ["Tây Ninh", "Đồng Tháp"]
+
+[[projects.routes]]
+assignee = "Nguyễn Thị Quỳnh Hoa"
+locations = ["Lâm Đồng", "An Giang"]

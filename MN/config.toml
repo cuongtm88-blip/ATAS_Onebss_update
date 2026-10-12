@@ -1,0 +1,40 @@
+[onebss]
+url = "https://onebss.vnpt.vn/#/admin/frmGiaoViecVIP?tag=0"
+browser_profile = ".browser-profile"
+headless = false
+browser_channel = "chrome"
+task = "Kiểm tra và xử lý"
+batch_size = 20
+timeout_ms = 30000
+
+[rules]
+file = "Giao phiếu_demo2_MN.xlsx"
+projects_file = "project_rules_MN.toml"
+# Chính và Phụ đều là nhân sự hợp lệ; không áp dụng quota theo vai trò.
+use_backup_members = true
+
+[google_sheet]
+url = "https://docs.google.com/spreadsheets/d/1vaHpBKhdWvWru8WIGigKEJDAcqngHLahEMxYIoBGi8w/edit?gid=1342897091#gid=1342897091"
+sheet_name = "Tháng 10/2026"
+sheet_name_template = "Tháng {month}/{year}"
+data_start_row = 9
+columns = [
+  "transaction_id", "subscriber_id", "service", "assignee",
+  "subscriber_name", "contract_type", "labor_address", "labor_province",
+  "project_name", "reassignment",
+]
+
+[runtime]
+database = "ats_onebss.db"
+preview_csv = "preview_assignments.csv"
+timezone = "Asia/Ho_Chi_Minh"
+poll_interval_minutes = 15
+# Chu kỳ lỗi được phục hồi và chạy lại gần như ngay lập tức.
+error_retry_seconds = 3
+
+[dashboard]
+enabled = false
+supabase_url = "https://oshrbmebtzacrfedwucl.supabase.co"
+service_key_env = "ATS_ONEBSS_SUPABASE_SERVICE_KEY"
+worker_id = "may-giao-phieu-mien-nam-01"
+command_poll_seconds = 5

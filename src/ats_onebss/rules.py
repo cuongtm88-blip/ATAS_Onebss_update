@@ -89,7 +89,14 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
             for route in item.get("routes", [])
         )
         fixed_assignee = str(item.get("fixed_assignee", "")).strip()
-        if not fixed_assignee and (not route_field or not routes):
+        fixed_assignees = tuple(
+            str(value).strip() for value in item.get("fixed_assignees", [])
+            if str(value).strip()
+        )
+        points_multiplier = Decimal(str(item.get("points_multiplier", 1)))
+        if points_multiplier <= 0:
+            raise RuleError(f"Quy tắc {name} phải có points_multiplier lớn hơn 0")
+        if not fixed_assignee and not fixed_assignees and (not route_field or not routes):
             raise RuleError(
                 f"Quy tắc {name} phải có fixed_assignee hoặc route_field và routes"
             )
@@ -108,6 +115,8 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
                 route_field=route_field,
                 routes=routes,
                 required_contains=required_contains,
+                points_multiplier=points_multiplier,
+                fixed_assignees=fixed_assignees,
             )
             for contains in contains_values
         )
@@ -127,8 +136,12 @@ def match_project_rule(
             for field, expected in rule.required_contains
         ):
             continue
+        if rule.fixed_assignees:
+            return ProjectMatch(
+                rule.name, rule.fixed_assignees[0], rule.fixed_assignees
+            )
         if rule.fixed_assignee:
-            return ProjectMatch(rule.name, rule.fixed_assignee)
+            return ProjectMatch(rule.name, rule.fixed_assignee, (rule.fixed_assignee,))
         route_fields = [rule.route_field]
         # Every routed project uses Địa chỉ LĐ first. If that text does not
         # identify a configured province/city, fall back to the explicit
@@ -149,7 +162,7 @@ def match_project_rule(
                     )
                 )
                 if location_matches and prefix_matches:
-                    return ProjectMatch(rule.name, route.assignee)
+                    return ProjectMatch(rule.name, route.assignee, (route.assignee,))
         shown_value = getattr(ticket, rule.route_field, "")
         raise RuleError(
             f"{rule.name}: không xác định được người nhận từ "

@@ -289,10 +289,14 @@ def plan_assignments(
                 if rule.write_to_sheet else None
             )
             if project:
-                if normalize(project.assignee) in excluded:
+                project_assignees = [
+                    name for name in project.assignees
+                    if normalize(name) not in excluded
+                ]
+                if not project_assignees:
                     continue
                 groups = {
-                    member_group(rules, project.assignee, rule): [project.assignee]
+                    f"Dự án {project.project_name}": project_assignees
                 }
                 project_name = project.project_name
             else:
@@ -325,6 +329,12 @@ def plan_assignments(
             )
         )
         planned_points = rule.points if rule.count_points else Decimal(0)
+        project_multiplier = next(
+            (item.points_multiplier for item in (project_rules or [])
+             if item.name == project_name),
+            Decimal(1),
+        )
+        planned_points *= project_multiplier
         # Scarce/fixed work is planned first; for equal eligibility, larger
         # point values first produce a tighter greedy load balance.
         candidates.append(
@@ -334,6 +344,7 @@ def plan_assignments(
                 ticket,
                 rule,
                 project_name,
+                project_multiplier,
                 groups,
                 sheet_existing,
                 sheet_reassignment,
@@ -344,7 +355,7 @@ def plan_assignments(
 
     candidates.sort(key=lambda item: (item[0], item[1]))
     for (
-        _count, _negative_points, ticket, rule, project_name, groups,
+        _count, _negative_points, ticket, rule, project_name, project_multiplier, groups,
         sheet_existing, sheet_reassignment, cohort_key, manual_assignee,
     ) in candidates:
         assignees: list[str] = []
@@ -437,7 +448,7 @@ def plan_assignments(
                     )
         assignment = Assignment(
             ticket, tuple(assignees),
-            rule.points if rule.count_points else Decimal(0), rule.row_number,
+            (rule.points * project_multiplier) if rule.count_points else Decimal(0), rule.row_number,
             rule.sheet_service or rule.service, project_name,
             sheet_existing=sheet_existing,
             sheet_reassignment=sheet_reassignment,

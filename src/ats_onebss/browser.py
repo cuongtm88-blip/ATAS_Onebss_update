@@ -1695,7 +1695,7 @@ class OneBSSClient:
                 await self.page.wait_for_timeout(500)
 
     async def _select_task_from_list(self, row: Locator) -> None:
-        """Choose the configured task from the visible Vue tree list."""
+        """Expand task groups and choose the configured task from the Vue tree."""
         assert self.page
         task_input = row.locator(".vue-treeselect__input")
         await task_input.click()
@@ -1705,12 +1705,42 @@ class OneBSSClient:
         await portal.first.wait_for(
             state="attached", timeout=self.session.config.timeout_ms
         )
-        option = await _visible(
-            portal.get_by_text(self.session.config.task, exact=True),
-            timeout_ms=self.session.config.timeout_ms,
+        deadline = (
+            asyncio.get_running_loop().time()
+            + self.session.config.timeout_ms / 1000
         )
-        await option.scroll_into_view_if_needed()
-        await option.click(timeout=5_000)
+        expanded = 0
+        while asyncio.get_running_loop().time() < deadline:
+            option = portal.get_by_text(self.session.config.task, exact=True)
+            for index in range(await option.count()):
+                candidate = option.nth(index)
+                if await candidate.is_visible():
+                    await candidate.scroll_into_view_if_needed()
+                    await candidate.click(timeout=5_000)
+                    return
+
+            # OneBSS nests task choices under collapsed categories such as
+            # “Công việc khác”. Expand the category arrow (not its label, which
+            # can select the category itself), then inspect the newly rendered
+            # child options. Repeating this handles deeper task trees too.
+            arrows = portal.locator(
+                ".vue-treeselect__option-arrow-container"
+                ":not(.vue-treeselect__option-arrow-container--rotated)"
+            )
+            if expanded >= 40 or not await arrows.count():
+                break
+            arrow = arrows.first
+            if not await arrow.is_visible():
+                break
+            await arrow.scroll_into_view_if_needed()
+            await arrow.click(timeout=5_000)
+            expanded += 1
+            await self.page.wait_for_timeout(150)
+
+        raise RuntimeError(
+            f"Không thấy nhiệm vụ '{self.session.config.task}' trong danh sách "
+            "OneBSS sau khi mở các nhóm nhiệm vụ"
+        )
 
     async def _select_single_assignee(self, assignee: str) -> Locator:
         """Select one employee and commit the configured task in the open popup."""

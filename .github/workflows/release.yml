@@ -60,6 +60,6 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Chọn trực tiếp nhiệm vụ từ danh sách OneBSS, không nhập tìm kiếm vào ô nhiệm vụ.
+            - Mở nhóm nhiệm vụ OneBSS và chọn đúng nhiệm vụ từ danh sách.
             - Xác nhận dòng Google Sheet bằng CSV export theo gid, tránh GViz trả thiếu dữ liệu phiếu.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

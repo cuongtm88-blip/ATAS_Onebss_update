@@ -1694,6 +1694,24 @@ class OneBSSClient:
                     raise
                 await self.page.wait_for_timeout(500)
 
+    async def _select_task_from_list(self, row: Locator) -> None:
+        """Choose the configured task from the visible Vue tree list."""
+        assert self.page
+        task_input = row.locator(".vue-treeselect__input")
+        await task_input.click()
+        portal = self.page.locator(
+            ".vue-treeselect__portal-target.vue-treeselect--open"
+        )
+        await portal.first.wait_for(
+            state="attached", timeout=self.session.config.timeout_ms
+        )
+        option = await _visible(
+            portal.get_by_text(self.session.config.task, exact=True),
+            timeout_ms=self.session.config.timeout_ms,
+        )
+        await option.scroll_into_view_if_needed()
+        await option.click(timeout=5_000)
+
     async def _select_single_assignee(self, assignee: str) -> Locator:
         """Select one employee and commit the configured task in the open popup."""
         assert self.page
@@ -1724,32 +1742,10 @@ class OneBSSClient:
                     row = await _row_with_normalized_text(
                         employee_rows, assignee, self.session.config.timeout_ms
                     )
-                    tree_input = row.locator(".vue-treeselect__input")
-                    await tree_input.wait_for(
+                    await row.locator(".vue-treeselect__input").wait_for(
                         state="visible", timeout=self.session.config.timeout_ms
                     )
-                    await tree_input.click()
-                    portal = self.page.locator(
-                        ".vue-treeselect__portal-target.vue-treeselect--open"
-                    )
-                    await portal.first.wait_for(
-                        state="attached", timeout=self.session.config.timeout_ms
-                    )
-                    await tree_input.fill(self.session.config.task)
-                    task_label = await _visible(
-                        portal.get_by_text(self.session.config.task, exact=True),
-                        timeout_ms=self.session.config.timeout_ms,
-                    )
-                    try:
-                        await task_label.click(timeout=5_000)
-                    except Exception:
-                        # Some OneBSS builds replace the option on pointer
-                        # movement; hover it and commit the highlighted item.
-                        if not await _row_has_selected_task(
-                            employee_rows, assignee, self.session.config.task
-                        ):
-                            await task_label.hover()
-                            await tree_input.press("Enter")
+                    await self._select_task_from_list(row)
                 deadline = (
                     asyncio.get_running_loop().time()
                     + self.session.config.timeout_ms / 1000
@@ -2075,29 +2071,7 @@ class OneBSSClient:
                     row = await _row_with_normalized_text(
                         employee_rows, assignee, self.session.config.timeout_ms
                     )
-                    tree_input = row.locator(".vue-treeselect__input")
-                    await tree_input.click()
-                    portal = self.page.locator(
-                        ".vue-treeselect__portal-target.vue-treeselect--open"
-                    )
-                    await portal.first.wait_for(
-                        state="attached", timeout=self.session.config.timeout_ms
-                    )
-                    await tree_input.fill(self.session.config.task)
-                    # Typing filters the tree to the exact task. Wait for its
-                    # visible option before committing it to the employee row.
-                    task_label = await _visible(
-                        portal.get_by_text(self.session.config.task, exact=True),
-                        timeout_ms=self.session.config.timeout_ms,
-                    )
-                    try:
-                        await task_label.click(timeout=5_000)
-                    except Exception:
-                        if not await _row_has_selected_task(
-                            employee_rows, assignee, self.session.config.task
-                        ):
-                            await task_label.hover()
-                            await tree_input.press("Enter")
+                    await self._select_task_from_list(row)
                     deadline = (
                         asyncio.get_running_loop().time()
                         + self.session.config.timeout_ms / 1000

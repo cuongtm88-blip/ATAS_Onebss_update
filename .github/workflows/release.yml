@@ -57,6 +57,6 @@ jobs:
         with:
           files: release-assets/*
           body: |
-            - Thêm Miền Nam với quy tắc giao phiếu, Google Sheet và hệ số điểm dự án 1,2.
-            - Lần mở đầu tiên cho phép chọn miền mặc định.
+            - Bản tiêu chuẩn dành riêng cho Miền Bắc, phát triển từ mã nguồn ATS OneBSS 0.9.41.
+            - Chỉ đóng gói cấu hình, quy tắc và workbook Miền Bắc.
             - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

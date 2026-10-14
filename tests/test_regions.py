@@ -5,18 +5,14 @@ import pytest
 from ats_onebss.regions import RegionError, load_regions
 
 
-def test_current_catalog_enables_north_and_south():
+def test_north_only_catalog():
     catalog = load_regions(Path(__file__).parents[1] / "regions.toml")
 
     assert catalog.default_region == "north"
     assert catalog.get("north").enabled is True
     assert catalog.get("north").config_path.name == "config.toml"
     assert catalog.get("north").update_repository == "cuongtm88-blip/ATAS_Onebss_update"
-    assert catalog.get("central").enabled is False
-    assert catalog.get("central").update_repository.endswith("_MienTrung")
-    assert catalog.get("south").enabled is True
-    assert catalog.get("south").config_path.name == "config.toml"
-    assert catalog.get("south").update_repository.endswith("_MienNam")
+    assert [region.key for region in catalog.regions] == ["north"]
 
 
 def test_enabled_region_requires_existing_config(tmp_path):

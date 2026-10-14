@@ -101,9 +101,6 @@ RESOURCE_FILES = (
     "config.toml",
     "project_rules.toml",
     "Giao phiếu_demo2.xlsx",
-    "MN/config.toml",
-    "MN/project_rules_MN.toml",
-    "MN/Giao phiếu_demo2_MN.xlsx",
 )
 
 
@@ -184,13 +181,15 @@ def load_app_region_catalog(
     regions = []
     for region in catalog.regions:
         packaged = default_regions.get(region.key)
+        if packaged is None:
+            continue
         updates = {
             "update_repository": region.update_repository
-            or (packaged.update_repository if packaged else ""),
+            or packaged.update_repository,
         }
         # A newly enabled region in an app update should become available to
         # existing installs whose runtime catalog still has the old placeholder.
-        if packaged and packaged.enabled and not region.enabled:
+        if packaged.enabled and not region.enabled:
             try:
                 relative_config = packaged.config_path.relative_to(defaults.root)
                 runtime_config = catalog.root / relative_config
@@ -203,7 +202,12 @@ def load_app_region_catalog(
                     description=packaged.description or region.description,
                 )
         regions.append(replace(region, **updates))
-    return RegionCatalog(catalog.root, catalog.default_region, tuple(regions))
+    default_region = (
+        catalog.default_region
+        if any(region.key == catalog.default_region for region in regions)
+        else defaults.default_region
+    )
+    return RegionCatalog(catalog.root, default_region, tuple(regions))
 
 
 def install_rules_file(source: str | Path, target: str | Path) -> Path | None:

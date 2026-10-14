@@ -97,6 +97,41 @@ update_repository = "owner/central"
     assert catalog.get("central").update_repository == "owner/custom-central"
 
 
+def test_north_only_package_ignores_stale_regions_and_default(tmp_path):
+    (tmp_path / "north.toml").write_text("", encoding="utf-8")
+    (tmp_path / "south.toml").write_text("", encoding="utf-8")
+    runtime_catalog = tmp_path / "runtime-regions.toml"
+    runtime_catalog.write_text(
+        '''default_region = "south"
+[regions.north]
+name = "Miền Bắc"
+enabled = true
+config = "north.toml"
+[regions.south]
+name = "Miền Nam"
+enabled = true
+config = "south.toml"
+''',
+        encoding="utf-8",
+    )
+    packaged_catalog = tmp_path / "packaged-regions.toml"
+    packaged_catalog.write_text(
+        '''default_region = "north"
+[regions.north]
+name = "Miền Bắc"
+enabled = true
+config = "north.toml"
+update_repository = "owner/north"
+''',
+        encoding="utf-8",
+    )
+
+    catalog = gui.load_app_region_catalog(runtime_catalog, packaged_catalog)
+
+    assert [region.key for region in catalog.regions] == ["north"]
+    assert catalog.default_region == "north"
+
+
 def test_prepare_runtime_root_refreshes_newer_editable_rules(monkeypatch, tmp_path):
     project = tmp_path / "project"
     resources = tmp_path / "resources"

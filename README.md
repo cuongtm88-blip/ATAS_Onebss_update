@@ -1,5 +1,11 @@
 # ATS OneBSS
 
+## Bản tiêu chuẩn Miền Bắc 0.9.55
+
+Bản phát hành này lấy mã nguồn từ mốc `v0.9.41`, chỉ bật Miền Bắc và không
+đóng gói cấu hình/workbook của miền khác. Các phiên bản phát hành tiếp theo cho
+Miền Bắc cần tiếp tục phát triển từ nhánh `release/north-standard-0.9.55`.
+
 Phiên bản 0.9.38 hỗ trợ một nhân sự thuộc nhiều nhóm: điểm tháng được tách theo
 nhóm dịch vụ để cân bằng tải và tránh cộng chéo giữa các nhóm.
 

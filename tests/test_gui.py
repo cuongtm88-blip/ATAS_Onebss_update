@@ -106,7 +106,9 @@ def test_prepare_runtime_root_refreshes_newer_editable_rules(monkeypatch, tmp_pa
     executable.touch()
     resources.mkdir()
     for relative in gui.RESOURCE_FILES:
-        (resources / relative).write_text("bundled", encoding="utf-8")
+        resource_file = resources / relative
+        resource_file.parent.mkdir(parents=True, exist_ok=True)
+        resource_file.write_text("bundled", encoding="utf-8")
     runtime.mkdir()
     runtime_rules = runtime / "Giao phiếu_demo2.xlsx"
     runtime_rules.write_text("old runtime", encoding="utf-8")

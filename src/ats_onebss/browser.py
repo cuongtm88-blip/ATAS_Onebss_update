@@ -890,47 +890,53 @@ class OneBSSClient:
         if await self.session_is_logged_in():
             return
 
-        password_field = page.locator('input[type="password"]:visible').first
-        if await password_field.count() == 0:
-            raise OneBSSLoginError("Không nhận diện được ô mật khẩu trên trang OneBSS.")
-        user_candidates = (
-            'input[autocomplete="username"]:visible',
-            'input[type="email"]:visible',
-            'input[name*="user" i]:visible',
-            'input[id*="user" i]:visible',
-            'input[type="text"]:visible',
-        )
-        username_field = None
-        for selector in user_candidates:
-            candidate = page.locator(selector).first
-            if await candidate.count():
-                username_field = candidate
-                break
-        if username_field is None:
-            raise OneBSSLoginError("Không nhận diện được ô tài khoản trên trang OneBSS.")
-
         try:
-            await username_field.fill(username)
-            await password_field.fill(password)
-            form = password_field.locator("xpath=ancestor::form[1]")
-            submit = form.locator('button[type="submit"], input[type="submit"]').first
-            if not await submit.count():
-                submit = page.get_by_role(
-                    "button", name=re.compile(r"đăng nhập|log\s*in|sign\s*in|tiếp tục", re.I)
-                ).first
-            if await submit.count() and await submit.is_visible():
-                await submit.click()
-            else:
-                await password_field.press("Enter")
-            await self._wait_for_auth_transition(60)
-            if await self.session_is_logged_in():
-                return
-
             otp_fields = await self._visible_otp_fields()
             if not otp_fields:
-                raise OneBSSLoginError(
-                    "OneBSS chưa hiện ô OTP sau khi gửi tài khoản và mật khẩu."
+                password_field = page.locator('input[type="password"]:visible').first
+                if await password_field.count() == 0:
+                    raise OneBSSLoginError(
+                        "Không nhận diện được ô mật khẩu hoặc OTP trên trang OneBSS."
+                    )
+                user_candidates = (
+                    'input[autocomplete="username"]:visible',
+                    'input[type="email"]:visible',
+                    'input[name*="user" i]:visible',
+                    'input[id*="user" i]:visible',
+                    'input[type="text"]:visible',
                 )
+                username_field = None
+                for selector in user_candidates:
+                    candidate = page.locator(selector).first
+                    if await candidate.count():
+                        username_field = candidate
+                        break
+                if username_field is None:
+                    raise OneBSSLoginError(
+                        "Không nhận diện được ô tài khoản trên trang OneBSS."
+                    )
+
+                await username_field.fill(username)
+                await password_field.fill(password)
+                form = password_field.locator("xpath=ancestor::form[1]")
+                submit = form.locator('button[type="submit"], input[type="submit"]').first
+                if not await submit.count():
+                    submit = page.get_by_role(
+                        "button", name=re.compile(r"đăng nhập|log\s*in|sign\s*in|tiếp tục", re.I)
+                    ).first
+                if await submit.count() and await submit.is_visible():
+                    await submit.click()
+                else:
+                    await password_field.press("Enter")
+                await self._wait_for_auth_transition(60)
+                if await self.session_is_logged_in():
+                    return
+                otp_fields = await self._visible_otp_fields()
+                if not otp_fields:
+                    raise OneBSSLoginError(
+                        "OneBSS chưa hiện ô OTP sau khi gửi tài khoản và mật khẩu."
+                    )
+
             print("OneBSS yêu cầu OTP; đang chờ mã từ Telegram (không ghi mã vào log).")
             code = await otp_provider()
             if not re.fullmatch(r"\d{4,8}", str(code)):

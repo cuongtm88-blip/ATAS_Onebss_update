@@ -96,6 +96,7 @@ from .ingest import INGEST_API_TOKEN_ENV
 
 
 APP_NAME = "ATS OneBSS"
+SOUTH_RULES_BUNDLE_VERSION = "south-rules-2026-10-14-1"
 RESOURCE_FILES = (
     "regions.toml",
     "config.toml",
@@ -156,6 +157,26 @@ def prepare_runtime_root() -> Path:
         if source_file.exists() and not target_file.exists():
             target_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_file, target_file)
+    # Windows installs keep regional defaults under LOCALAPPDATA across app
+    # updates. Refresh the South rules once per rules-bundle revision so an
+    # older copied Excel/TOML file cannot silently override the new package.
+    # macOS keeps its existing resource behavior.
+    if os.name == "nt":
+        south_source = source / "MN"
+        south_target = target / "MN"
+        marker = south_target / ".bundled-rules-version"
+        try:
+            installed_rules_version = marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            installed_rules_version = ""
+        if installed_rules_version != SOUTH_RULES_BUNDLE_VERSION:
+            for filename in ("project_rules_MN.toml", "Giao_phieu_MN.xlsx"):
+                source_file = south_source / filename
+                if source_file.is_file():
+                    south_target.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source_file, south_target / filename)
+            south_target.mkdir(parents=True, exist_ok=True)
+            marker.write_text(SOUTH_RULES_BUNDLE_VERSION, encoding="utf-8")
     # In the development layout the editable file is next to ``dist`` while
     # the running app reads its private Application Support copy.  Refresh
     # only when that editable source is newer, so a manual runtime adjustment

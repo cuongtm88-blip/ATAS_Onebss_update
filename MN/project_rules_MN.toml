@@ -52,29 +52,29 @@ points_multiplier = 1.2
 name = "Dự án BCA"
 priority = 90
 match_fields = ["customer_name", "subscriber_name"]
-contains = ["Cục Viễn Thông & Cơ Yếu Bca", "CAP", "CAX", "Công An", "H04", "Pc10"]
+contains = ["Cục Viễn Thông & Cơ Yếu Bca", "CAX", "Công An", "H04", "Pc10"]
 route_field = "labor_address"
 points_multiplier = 1.2
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Hoàng Khanh"
-locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh", "Bình Dương", "Vũng Tàu", "Bà Rịa-Vũng Tàu", "Bà Rịa - Vũng Tàu"]
 
 [[projects.routes]]
 assignee = "Cao Châu Phương Thảo"
-locations = ["Đồng Nai", "Vĩnh Long"]
+locations = ["Đồng Nai", "Bình Phước", "Vĩnh Long", "Bến Tre", "Trà Vinh"]
 
 [[projects.routes]]
 assignee = "Phan Thị Kim Ngọc"
-locations = ["Cần Thơ", "Cà Mau"]
+locations = ["Cần Thơ", "Sóc Trăng", "Hậu Giang", "Cà Mau", "Bạc Liêu"]
 
 [[projects.routes]]
 assignee = "Trần Thị Hải Yến"
-locations = ["Tây Ninh", "Đồng Tháp"]
+locations = ["Tây Ninh", "Long An", "Đồng Tháp", "Tiền Giang"]
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Quỳnh Hoa"
-locations = ["Lâm Đồng", "An Giang"]
+locations = ["Lâm Đồng", "Đắk Nông", "Bình Thuận", "An Giang", "Kiên Giang"]
 
 [[projects]]
 name = "Dự án Cục BĐTW"
@@ -86,23 +86,23 @@ points_multiplier = 1.2
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Hoàng Khanh"
-locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh", "Bình Dương", "Vũng Tàu", "Bà Rịa-Vũng Tàu", "Bà Rịa - Vũng Tàu"]
 
 [[projects.routes]]
 assignee = "Cao Châu Phương Thảo"
-locations = ["Đồng Nai", "Vĩnh Long"]
+locations = ["Đồng Nai", "Bình Phước", "Vĩnh Long", "Bến Tre", "Trà Vinh"]
 
 [[projects.routes]]
 assignee = "Phan Thị Kim Ngọc"
-locations = ["Cần Thơ", "Cà Mau"]
+locations = ["Cần Thơ", "Sóc Trăng", "Hậu Giang", "Cà Mau", "Bạc Liêu"]
 
 [[projects.routes]]
 assignee = "Trần Thị Hải Yến"
-locations = ["Tây Ninh", "Đồng Tháp"]
+locations = ["Tây Ninh", "Long An", "Đồng Tháp", "Tiền Giang"]
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Quỳnh Hoa"
-locations = ["Lâm Đồng", "An Giang"]
+locations = ["Lâm Đồng", "Đắk Nông", "Bình Thuận", "An Giang", "Kiên Giang"]
 
 [[projects]]
 name = "Dự án BTC"
@@ -114,23 +114,23 @@ points_multiplier = 1.2
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Hoàng Khanh"
-locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh", "Bình Dương", "Vũng Tàu", "Bà Rịa-Vũng Tàu", "Bà Rịa - Vũng Tàu"]
 
 [[projects.routes]]
 assignee = "Cao Châu Phương Thảo"
-locations = ["Đồng Nai", "Vĩnh Long"]
+locations = ["Đồng Nai", "Bình Phước", "Vĩnh Long", "Bến Tre", "Trà Vinh"]
 
 [[projects.routes]]
 assignee = "Phan Thị Kim Ngọc"
-locations = ["Cần Thơ", "Cà Mau"]
+locations = ["Cần Thơ", "Sóc Trăng", "Hậu Giang", "Cà Mau", "Bạc Liêu"]
 
 [[projects.routes]]
 assignee = "Trần Thị Hải Yến"
-locations = ["Tây Ninh", "Đồng Tháp"]
+locations = ["Tây Ninh", "Long An", "Đồng Tháp", "Tiền Giang"]
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Quỳnh Hoa"
-locations = ["Lâm Đồng", "An Giang"]
+locations = ["Lâm Đồng", "Đắk Nông", "Bình Thuận", "An Giang", "Kiên Giang"]
 
 [[projects]]
 name = "Dự án BHXH"
@@ -142,20 +142,20 @@ points_multiplier = 1.2
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Hoàng Khanh"
-locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh"]
+locations = ["Hồ Chí Minh", "TP HCM", "TP. HCM", "TPHCM", "Thành phố Hồ Chí Minh", "Bình Dương", "Vũng Tàu", "Bà Rịa-Vũng Tàu", "Bà Rịa - Vũng Tàu"]
 
 [[projects.routes]]
 assignee = "Cao Châu Phương Thảo"
-locations = ["Đồng Nai", "Vĩnh Long"]
+locations = ["Đồng Nai", "Bình Phước", "Vĩnh Long", "Bến Tre", "Trà Vinh"]
 
 [[projects.routes]]
 assignee = "Phan Thị Kim Ngọc"
-locations = ["Cần Thơ", "Cà Mau"]
+locations = ["Cần Thơ", "Sóc Trăng", "Hậu Giang", "Cà Mau", "Bạc Liêu"]
 
 [[projects.routes]]
 assignee = "Trần Thị Hải Yến"
-locations = ["Tây Ninh", "Đồng Tháp"]
+locations = ["Tây Ninh", "Long An", "Đồng Tháp", "Tiền Giang"]
 
 [[projects.routes]]
 assignee = "Nguyễn Thị Quỳnh Hoa"
-locations = ["Lâm Đồng", "An Giang"]
+locations = ["Lâm Đồng", "Đắk Nông", "Bình Thuận", "An Giang", "Kiên Giang"]

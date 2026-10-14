@@ -10,6 +10,7 @@ timeout_ms = 30000
 [rules]
 file = "Giao_phieu_MN.xlsx"
 projects_file = "project_rules_MN.toml"
+south_special_rules = true
 # Chính và Phụ đều là nhân sự hợp lệ; không áp dụng quota theo vai trò.
 use_backup_members = true
 

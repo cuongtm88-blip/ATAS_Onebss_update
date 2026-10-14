@@ -275,6 +275,27 @@ def _sheet_assignment_index(
     return {identity: tuple(item[1]) for identity, item in latest.items()}
 
 
+def _sheet_sip_transaction_counts(
+    sheets: Iterable[tuple[str, list[list[str]]]],
+) -> dict[str, int]:
+    """Count distinct SIP tickets per assignment date and transaction."""
+    identities: dict[str, set[str]] = {}
+    for _sheet_name, rows in sheets:
+        for row in rows:
+            if not _is_sheet_data_row(row) or len(row) < 5:
+                continue
+            if normalize(row[3]) != normalize("SIP"):
+                continue
+            assigned_at = _parse_sheet_timestamp(row[0])
+            if assigned_at is None:
+                continue
+            key = f"{assigned_at:%Y-%m-%d}\x1f{normalize(row[1])}"
+            identities.setdefault(key, set()).add(
+                ticket_identity(row[1], _sheet_subscriber_key(row[2]))
+            )
+    return {key: len(values) for key, values in identities.items()}
+
+
 def _sheet_service_assignment_index(
     rows: list[list[str]], service: str,
 ) -> dict[str, str]:
@@ -304,10 +325,12 @@ class SheetAssignmentSource(dict[str, tuple[str, ...]]):
         assignments: dict[str, tuple[str, ...]],
         current_keys: Iterable[str],
         service_assignments: dict[str, dict[str, str]] | None = None,
+        sip_transaction_counts: dict[str, int] | None = None,
     ) -> None:
         super().__init__(assignments)
         self.current_keys = set(current_keys)
         self.service_assignments = service_assignments or {}
+        self.sip_transaction_counts = sip_transaction_counts or {}
 
 
 def _sheet_month_scores(
@@ -2251,6 +2274,7 @@ class GoogleSheetClient:
             _sheet_assignment_index(exported),
             _sheet_assignment_index([(current_name, current_rows)]),
             service_assignments,
+            _sheet_sip_transaction_counts(exported),
         )
         scores = _sheet_month_scores(current_rows, score_member_names)
         print(

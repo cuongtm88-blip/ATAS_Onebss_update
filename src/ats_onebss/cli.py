@@ -382,6 +382,9 @@ async def collect_plan(
         cohort_conflicts,
         manual_assignees,
         monthly_service_assignments,
+        config.south_special_rules,
+        now.date().isoformat(),
+        getattr(sheet_assignees, "sip_transaction_counts", {}),
     )
     for ticket in valid:
         pinned = cohort_conflicts.get(ticket.key)

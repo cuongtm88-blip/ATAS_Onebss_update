@@ -31,6 +31,9 @@ def plan_assignments(
     cohort_conflicts: dict[str, str] | None = None,
     manual_assignees: dict[str, str] | None = None,
     service_assignments: dict[str, dict[str, str]] | None = None,
+    south_special_rules: bool = False,
+    planning_day: str = "",
+    sip_transaction_counts: dict[str, int] | None = None,
 ) -> list[Assignment]:
     scores = {
         normalize(name): Decimal(str(value))
@@ -175,6 +178,29 @@ def plan_assignments(
     ] = []
     cohort_pins = dict(cohort_assignees or {})
     cohort_conflicts = cohort_conflicts if cohort_conflicts is not None else {}
+    sip_ranks: dict[str, int] = {}
+    if south_special_rules:
+        prior_sip_counts = dict(sip_transaction_counts or {})
+        current_sip_counts: dict[str, int] = {}
+        for ticket in tickets:
+            if ticket.key in completed:
+                continue
+            try:
+                ticket_rule = match_rule(rules, ticket)
+            except RuleError:
+                continue
+            if normalize(ticket_rule.sheet_service or ticket_rule.service) != normalize("SIP"):
+                continue
+            if not ticket.transaction_id or not ticket.customer_name:
+                continue
+            identity = ticket_identity(ticket.transaction_id, ticket.subscriber_id)
+            if preferred_assignees.get(identity):
+                continue
+            transaction_key = f"{planning_day}\x1f{normalize(ticket.transaction_id)}"
+            current_sip_counts[transaction_key] = current_sip_counts.get(
+                transaction_key, prior_sip_counts.get(transaction_key, 0)
+            ) + 1
+            sip_ranks[ticket.key] = current_sip_counts[transaction_key]
     # If an already recorded ticket from this cohort is in the current queue,
     # preserve its recorded assignee as the cohort anchor unless we already
     # have a successful assignment saved locally.
@@ -244,6 +270,21 @@ def plan_assignments(
             if any(normalize(assignee) in excluded for assignee in preferred):
                 continue
         voice_mode = voice_brandname_mode(rule, ticket)
+        service_label = normalize(ticket.service_type or ticket.service)
+        installation = unaccent(ticket.installation_type)
+        fixed_sip_trunk = south_special_rules and (
+            service_label == normalize("Thuê bao Sip Trunking")
+            or normalize(ticket.service) == normalize("Thuê bao Sip Trunking")
+        ) and any(marker in installation for marker in (
+            "khoa mo dich vu ims", "mo tam dung su dung ims",
+        ))
+        fixed_brandname_suspend = south_special_rules and (
+            service_label == normalize("Voice Brandname")
+            and any(marker in installation for marker in (
+                "tam dung", "huy", "khoi phuc so thue bao",
+            ))
+        )
+        fixed_sip_batch = south_special_rules and sip_ranks.get(ticket.key, 31) <= 30
         # The current VIP state is stronger than Sheet history for supervision.
         # A returned Giam sat ticket must follow the matched regional rule.
         # Replays are still appended as a new row and marked so they do not
@@ -258,6 +299,17 @@ def plan_assignments(
             project_name = project.project_name if project else ""
             sheet_existing = in_sheet_history and rule.write_to_sheet
             sheet_reassignment = sheet_existing
+        elif fixed_sip_trunk or fixed_brandname_suspend or fixed_sip_batch:
+            fixed_name = (
+                "Trần Thị Tuyết Nhung"
+                if fixed_sip_trunk or fixed_brandname_suspend
+                else "Nguyễn Tú Uyên"
+            )
+            if normalize(fixed_name) in excluded:
+                continue
+            groups = {"Quy tắc cố định Miền Nam": [fixed_name]}
+            project_name = ""
+            sheet_existing = in_sheet_history and rule.write_to_sheet
         elif voice_mode == "giam_sat":
             groups = eligible_members(
                 rule, ticket, use_backups, excluded_names
@@ -323,13 +375,24 @@ def plan_assignments(
             else:
                 sheet_reassignment = False
         eligible_count = sum(len(members) for members in groups.values())
+        cohort_service = rule.sheet_service or rule.service
+        if south_special_rules and normalize(cohort_service) in {
+            normalize(name) for name in (
+                "Mega LT", "Mega NT", "Fiber", "Kênh Thuê Riêng",
+                "Internet trực tiếp", "Megawan LT", "Megawan NT",
+                "Metronet LT", "Metronet NT",
+            )
+        }:
+            cohort_service = "MN Group DV: multi-service same address"
         cohort_key = (
             "" if manual_assignee or voice_mode == "giam_sat"
             or uses_percentage_routing(rule) else assignment_cohort_key(
                 ticket.customer_name, ticket.labor_address,
-                ticket.service_type or ticket.service,
+                cohort_service,
             )
         )
+        if cohort_key and south_special_rules:
+            cohort_key = f"{planning_day}\x1f{cohort_key}"
         planned_points = rule.points if rule.count_points else Decimal(0)
         project_multiplier = next(
             (item.points_multiplier for item in (project_rules or [])

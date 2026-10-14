@@ -39,6 +39,7 @@ class Config:
     dashboard_worker_id: str
     dashboard_command_poll_seconds: int
     excluded_members: tuple[str, ...]
+    south_special_rules: bool
 
 
 def load_config(path: str | Path) -> Config:
@@ -137,4 +138,7 @@ def load_config(path: str | Path) -> Config:
             2, int(dashboard.get("command_poll_seconds", 5))
         ),
         excluded_members=(),
+        south_special_rules=bool(
+            rules.get("south_special_rules", config_path.parent.name == "MN")
+        ),
     )

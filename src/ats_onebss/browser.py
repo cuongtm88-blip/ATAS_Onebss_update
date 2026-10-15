@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 from playwright.async_api import BrowserContext, Locator, Page, async_playwright
 
 from .config import Config
-from .models import Assignment, ProjectRule, Ticket
+from .models import Assignment, ProjectRule, ServiceRule, Ticket
 from .rules import member_score_key
 from .text import normalize, ticket_identity, unaccent
 
@@ -433,6 +433,10 @@ def _ticket_metadata_from_api(payload: object, ticket: Ticket) -> dict[str, str]
         "labor_address": {"diachild", "diachilaodong"},
         "connection_address": {"diachikn", "diachiketnoi"},
         "labor_province": {"tinhld", "tinhlaodong", "tentinhld", "tentinhlaodong"},
+        "channel_type": {
+            "loaikenh", "tenloaikenh", "loaikenhban", "tenloaikenhban",
+            "loaikenhthuebao", "tenloaikenhthuebao", "loaikenhtt", "tenloaikenhtt",
+        },
     }
     # The response can contain a short grid record as well as a fuller nested
     # record for the same sale transaction.  Do not stop at the first match:
@@ -820,7 +824,7 @@ class OneBSSClient:
     def __init__(self, session: BrowserSession):
         self.session = session
         self.page: Page | None = None
-        self._ticket_details: dict[str, tuple[str, str, str, str, str, str]] = {}
+        self._ticket_details: dict[str, tuple[str, str, str, str, str, str, str]] = {}
         self._ticket_response_payload: object = None
         self._page_size = 500
         self._page_size_announced = False
@@ -1367,6 +1371,7 @@ class OneBSSClient:
                     labor_province=(
                         ticket.labor_province or metadata["labor_province"]
                     ),
+                    channel_type=ticket.channel_type or metadata["channel_type"],
                 )
                 result.append(ticket)
         return result
@@ -1455,7 +1460,10 @@ class OneBSSClient:
         return ""
 
     async def enrich_ticket_details(
-        self, tickets: list[Ticket], project_rules: list[ProjectRule]
+        self,
+        tickets: list[Ticket],
+        project_rules: list[ProjectRule],
+        service_rules: list[ServiceRule] | None = None,
     ) -> list[Ticket]:
         """Attach missing Sheet metadata and project-routing details.
 
@@ -1476,6 +1484,11 @@ class OneBSSClient:
             {"customer_name", "subscriber_name"}.intersection(rule.match_fields)
             for rule in project_rules
         )
+        channel_services = {
+            normalize(rule.service)
+            for rule in (service_rules or [])
+            if "loai kenh" in unaccent(rule.condition)
+        }
         for ticket in tickets:
             if not ticket.labor_province:
                 ticket = replace(
@@ -1516,12 +1529,17 @@ class OneBSSClient:
                 and not route_resolves
             )
             needs_notes = bool(matching_note_rules) and not ticket.notes
+            needs_channel = (
+                normalize(ticket.service) in channel_services
+                and not ticket.channel_type
+            )
             if (
                 not requires_detail_project_verification
                 and not needs_customer
                 and not needs_subscriber
                 and not needs_address
                 and not needs_notes
+                and not needs_channel
             ):
                 # On this OneBSS screen Tên thuê bao is the grid rendering of
                 # the detail field Tên KH. Avoid reopening every unrelated row.
@@ -1545,7 +1563,10 @@ class OneBSSClient:
                 notes = ""
                 labor_address = ""
                 connection_address = ""
+                channel_type = ticket.channel_type
                 if details_match:
+                    if needs_channel:
+                        channel_type = await self._technical_value("Loại kênh")
                     # OneBSS populates the detail form asynchronously after
                     # selection. Poll the actual Tên KH field instead of
                     # assuming one fixed delay is sufficient.
@@ -1591,6 +1612,7 @@ class OneBSSClient:
                 labor_province = ticket.labor_province or _province_from_address(
                     labor_address
                 )
+                channel_type = channel_type or ticket.channel_type
                 cached = (
                     customer_name,
                     subscriber_name,
@@ -1598,6 +1620,7 @@ class OneBSSClient:
                     labor_address,
                     connection_address,
                     labor_province,
+                    channel_type,
                 )
                 if not (requires_detail_project_verification and not details_match):
                     self._ticket_details[ticket.key] = cached
@@ -1608,6 +1631,7 @@ class OneBSSClient:
                 labor_address,
                 connection_address,
                 labor_province,
+                channel_type,
             ) = cached
             enriched.append(
                 replace(
@@ -1618,6 +1642,7 @@ class OneBSSClient:
                     labor_address=labor_address,
                     connection_address=connection_address,
                     labor_province=labor_province,
+                    channel_type=channel_type,
                 )
             )
         return enriched

@@ -238,7 +238,7 @@ async def collect_plan(
         )
         for ticket in tickets
     ]
-    tickets = await client.enrich_ticket_details(tickets, project_rules)
+    tickets = await client.enrich_ticket_details(tickets, project_rules, rules)
     valid = []
     skipped: list[tuple[object, str]] = []
     manual_assignees: dict[str, str] = {}

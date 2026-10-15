@@ -516,7 +516,9 @@ def _condition_matches(rule: ServiceRule, ticket: Ticket) -> bool:
         channel = unaccent(ticket.channel_type)
         if "noi tinh" in condition and "lien tinh" not in condition:
             return "noi tinh" in channel
-        return not channel or "lien tinh" in channel
+        # Missing channel metadata is not evidence that a ticket is LT. Hold
+        # it for review rather than silently routing it to the LT rule.
+        return bool(channel) and "lien tinh" in channel
     if "loai hd" in condition:
         contract = unaccent(ticket.contract_type)
         candidates = condition.split(":", 1)[-1]

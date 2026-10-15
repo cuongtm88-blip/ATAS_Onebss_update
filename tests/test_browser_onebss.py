@@ -60,6 +60,46 @@ def test_detail_row_identity_rejects_subscriber_mismatch_even_if_transaction_mat
     assert not asyncio.run(_row_matches_ticket(Row(), ticket))
 
 
+def test_ticket_metadata_reads_channel_type_from_matching_api_record():
+    ticket = Ticket("GD-1", "TB-1", "MegaWan")
+    payload = {"data": [
+        {"maGiaoDichBan": "GD-1", "maThueBaoBan": "TB-1", "tenLoaiKenh": "Nội Tỉnh"},
+        {"maGiaoDichBan": "GD-2", "maThueBaoBan": "TB-2", "tenLoaiKenh": "Liên Tỉnh"},
+    ]}
+
+    assert _ticket_metadata_from_api(payload, ticket)["channel_type"] == "Nội Tỉnh"
+
+
+def test_channel_type_is_read_from_verified_ticket_technical_panel():
+    class Cells:
+        async def evaluate_all(self, _script):
+            return [{"text": "GD-1", "label": "GD-1 column header Mã giao dịch bán"},
+                    {"text": "TB-1", "label": "TB-1 column header Mã thuê bao bán"}]
+
+    class Row:
+        click = AsyncMock()
+
+        def locator(self, selector):
+            assert selector == "td"
+            return Cells()
+
+    async def run():
+        client = OneBSSClient(SimpleNamespace())
+        client.page = SimpleNamespace(wait_for_timeout=AsyncMock())
+        client._ticket_row = AsyncMock(return_value=Row())
+        client._wait_for_ticket_detail = AsyncMock(return_value=True)
+        client._detail_value = AsyncMock(return_value="Customer")
+        client._technical_value = AsyncMock(return_value="Nội Tỉnh")
+        ticket = Ticket("GD-1", "TB-1", "MegaWan", subscriber_name="Customer")
+        service_rule = SimpleNamespace(service="MegaWan", condition="Loại kênh: Nội tỉnh")
+        result = await client.enrich_ticket_details([ticket], [], [service_rule])
+        return result[0], client
+
+    enriched, client = asyncio.run(run())
+    assert enriched.channel_type == "Nội Tỉnh"
+    client._technical_value.assert_awaited_once_with("Loại kênh")
+
+
 def test_project_details_wait_for_form_to_refresh_instead_of_using_previous_ticket():
     class Cells:
         async def evaluate_all(self, _script):

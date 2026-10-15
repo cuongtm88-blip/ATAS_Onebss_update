@@ -269,6 +269,8 @@ def test_demo2_service_map_uses_channel_and_installation_conditions():
     assert local.points == Decimal("17")
     assert interprovincial.sheet_service == "Megawan LT"
     assert interprovincial.points == Decimal("27")
+    with pytest.raises(RuleError):
+        match_rule(rules, Ticket("GD-unknown", "TB-unknown", "MegaWan"))
 
     domain = match_rule(
         rules,

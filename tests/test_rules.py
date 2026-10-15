@@ -651,6 +651,31 @@ def test_vietlott_reassigned_routes(address, assignee):
     assert match.assignee == assignee
 
 
+@pytest.mark.parametrize(
+    ("address", "assignee"),
+    [
+        ("Điểm lắp đặt tại Hà Nội", "Đào Anh Vũ"),
+        ("Điểm lắp đặt tại Lạng Sơn", "Đoàn Hải Hà"),
+        ("Điểm lắp đặt tại Thanh Hóa", "Nguyễn Duy Thành"),
+        ("Điểm lắp đặt tại Hà Giang", "Vũ Thế Ninh"),
+    ],
+)
+def test_xo_so_kinh_thiet_thu_do_uses_vietlott_project_routes(address, assignee):
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    ticket = Ticket(
+        "GD-XOSO", "TB-XOSO", "Fiber",
+        customer_name="Công Ty TNHH Xổ Số Kiến Thiết Thủ Đô",
+        labor_address=address,
+    )
+
+    match = match_project_rule(rules, ticket)
+
+    assert match is not None
+    assert match.project_name == "Dự án Xổ số"
+    assert match.assignee == assignee
+
+
 def test_le_duc_vinh_is_not_assigned_to_any_project():
     rules = load_project_rules(Path(__file__).parents[1] / "project_rules.toml")
 

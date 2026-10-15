@@ -1,10 +1,13 @@
 # ATS OneBSS
 
-## Bản tiêu chuẩn Miền Bắc 0.9.56
+## Bản tiêu chuẩn Miền Bắc 0.9.57
 
 Bản phát hành này lấy mã nguồn từ mốc `v0.9.41`, chỉ bật Miền Bắc và không
 đóng gói cấu hình/workbook của miền khác. Các phiên bản phát hành tiếp theo cho
 Miền Bắc tiếp tục phát triển từ nhánh `release/north-standard-0.9.55`.
+
+Phiên bản 0.9.57 bổ sung Dự án Xổ số cho khách hàng có Tên KH chứa “Xổ Số Kiến
+Thiết Thủ Đô”, dùng cùng tuyến địa bàn và ngoại lệ mã thuê bao như Dự án Vietlott.
 
 Phiên bản 0.9.56 đọc `Loại kênh` từ OneBSS khi phân loại dịch vụ MegaWan. Phiếu
 `Nội Tỉnh` và `Liên Tỉnh` được ánh xạ riêng; nếu không đọc được loại kênh, phiếu

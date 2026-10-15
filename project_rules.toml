@@ -136,6 +136,47 @@ locations = ["Tuyên Quang"]
 subscriber_prefixes = ["bgt2"]
 
 [[projects]]
+name = "Dự án Xổ số"
+priority = 90
+match_fields = ["customer_name"]
+contains = "Xổ Số Kiến Thiết Thủ Đô"
+route_field = "labor_address"
+
+[[projects.routes]]
+assignee = "Vũ Thế Ninh"
+locations = ["Hưng Yên", "Thái Bình", "Điện Biên", "Hải Phòng", "Hải Dương", "Lào Cai", "Yên Bái", "Hà Tĩnh", "Hà Giang"]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = ["Hà Nội"]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = ["Lạng Sơn"]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = ["Thái Nguyên", "Bắc Kạn", "Lai Châu", "Ninh Bình", "Nam Định", "Hà Nam"]
+
+[[projects.routes]]
+assignee = "Đào Anh Vũ"
+locations = ["Tuyên Quang"]
+subscriber_prefixes = ["bgt5"]
+
+[[projects.routes]]
+assignee = "Đoàn Hải Hà"
+locations = ["Sơn La", "Cao Bằng", "Phú Thọ", "Vĩnh Phúc", "Hòa Bình"]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = ["Bắc Ninh", "Bắc Giang", "Nghệ An", "Quảng Ninh", "Thanh Hóa"]
+
+[[projects.routes]]
+assignee = "Nguyễn Duy Thành"
+locations = ["Tuyên Quang"]
+subscriber_prefixes = ["bgt2"]
+
+[[projects]]
 name = "Dự án BTC"
 priority = 90
 # OneBSS can expose the project customer in either the Tên KH detail or

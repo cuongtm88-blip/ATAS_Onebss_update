@@ -1439,12 +1439,15 @@ class OneBSSClient:
     async def _technical_value(self, label: str) -> str:
         """Read one value from the HTML technical-information panel."""
         assert self.page
-        labels = self.page.locator("#frmGiaoViecVIP b").filter(has_text=label)
+        labels = self.page.locator(
+            "#frmGiaoViecVIP b, #frmGiaoViecVIP strong"
+        ).filter(has_text=label)
         for index in range(await labels.count()):
             item = labels.nth(index)
             if not await item.is_visible():
                 continue
-            if normalize(await item.inner_text()) != normalize(label):
+            shown_label = re.sub(r"[:：\s]+$", "", await item.inner_text())
+            if normalize(shown_label) != normalize(label):
                 continue
             return await item.evaluate(
                 """element => {
@@ -1454,7 +1457,13 @@ class OneBSSClient:
                          node = node.nextSibling) {
                         value += node.textContent || '';
                     }
-                    return value.replace(/^\\s*:\\s*/, '').trim();
+                    if (!value.trim() && element.parentElement) {
+                        const parent = element.parentElement;
+                        const text = parent.innerText || '';
+                        const label = element.innerText || '';
+                        if (text.startsWith(label)) value = text.slice(label.length);
+                    }
+                    return value.replace(/^\\s*[:：]\\s*/, '').trim();
                 }"""
             )
         return ""

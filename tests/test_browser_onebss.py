@@ -70,6 +70,36 @@ def test_ticket_metadata_reads_channel_type_from_matching_api_record():
     assert _ticket_metadata_from_api(payload, ticket)["channel_type"] == "Nội Tỉnh"
 
 
+def test_technical_value_accepts_channel_label_with_colon():
+    class Label:
+        async def is_visible(self):
+            return True
+
+        async def inner_text(self):
+            return "Loại kênh :"
+
+        async def evaluate(self, _script):
+            return "Liên Tỉnh Nội Vùng"
+
+    class Labels:
+        def filter(self, *, has_text):
+            assert has_text == "Loại kênh"
+            return self
+
+        async def count(self):
+            return 1
+
+        def nth(self, _index):
+            return Label()
+
+    async def run():
+        client = OneBSSClient(SimpleNamespace())
+        client.page = SimpleNamespace(locator=lambda selector: Labels())
+        return await client._technical_value("Loại kênh")
+
+    assert asyncio.run(run()) == "Liên Tỉnh Nội Vùng"
+
+
 def test_channel_type_is_read_from_verified_ticket_technical_panel():
     class Cells:
         async def evaluate_all(self, _script):

@@ -269,8 +269,16 @@ def test_demo2_service_map_uses_channel_and_installation_conditions():
     assert local.points == Decimal("17")
     assert interprovincial.sheet_service == "Megawan LT"
     assert interprovincial.points == Decimal("27")
-    with pytest.raises(RuleError):
-        match_rule(rules, Ticket("GD-unknown", "TB-unknown", "MegaWan"))
+    unknown_channel = match_rule(
+        rules, Ticket("GD-unknown", "TB-unknown", "MegaWan")
+    )
+    assert unknown_channel.sheet_service == "Megawan LT"
+
+    unrecognized_channel = match_rule(
+        rules,
+        Ticket("GD-unrecognized", "TB-unrecognized", "MegaWan", channel_type="Khác"),
+    )
+    assert unrecognized_channel.sheet_service == "Megawan LT"
 
     domain = match_rule(
         rules,

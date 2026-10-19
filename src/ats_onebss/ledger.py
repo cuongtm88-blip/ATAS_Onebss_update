@@ -83,7 +83,7 @@ class Ledger:
                 )
             for column in (
                 "subscriber_name", "contract_type", "labor_address",
-                "labor_province", "customer_name",
+                "labor_province", "customer_name", "installation_type",
             ):
                 if column not in columns:
                     db.execute(
@@ -289,8 +289,8 @@ class Ledger:
                      rule_row, created_at, sheet_timestamp, project_name, original_assignee,
                      sheet_ordinal, sheet_existing, sheet_saved, api_saved, subscriber_name,
                      sheet_reassignment, contract_type, labor_address, labor_province, customer_name,
-                     cohort_key)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     installation_type, cohort_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         ledger_key,
@@ -318,6 +318,7 @@ class Ledger:
                         assignment.ticket.labor_address,
                         assignment.ticket.labor_province,
                         assignment.ticket.customer_name,
+                        assignment.ticket.installation_type,
                         assignment.cohort_key,
                     ),
                 )
@@ -446,7 +447,7 @@ class Ledger:
                 """
                 SELECT ticket_key, transaction_id, subscriber_id, service, assignee, points,
                        sheet_timestamp, sheet_ordinal, subscriber_name, contract_type,
-                       labor_address, labor_province, project_name,
+                       labor_address, labor_province, project_name, installation_type,
                        CASE WHEN sheet_reassignment = 1 THEN 'Giao lại' ELSE '' END
                            AS reassignment
                 FROM assignments
@@ -458,7 +459,7 @@ class Ledger:
             "ticket_key", "transaction_id", "subscriber_id", "service", "assignee",
             "points", "sheet_timestamp", "sheet_ordinal", "subscriber_name",
             "contract_type", "labor_address", "labor_province", "project_name",
-            "reassignment",
+            "installation_type", "reassignment",
         ]
         return [dict(zip(keys, row, strict=True)) for row in rows]
 

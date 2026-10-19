@@ -231,3 +231,29 @@ def test_google_sheet_append_marks_existing_ticket_in_column_k():
     asyncio.run(client.append([assignment]))
 
     assert client.append_rows.await_args.args[0][0][-1] == "Giao lại"
+
+
+def test_google_sheet_append_writes_installation_type_after_reassignment():
+    config = SimpleNamespace(
+        sheet_columns=(
+            "transaction_id", "subscriber_id", "service", "assignee",
+            "subscriber_name", "contract_type", "labor_address",
+            "labor_province", "project_name", "reassignment", "installation_type",
+        ),
+        sheet_name_template="Tháng {month}/{year}",
+        timezone="Asia/Ho_Chi_Minh",
+    )
+    client = GoogleSheetClient(SimpleNamespace(config=config))
+    client.append_rows = AsyncMock()
+    assignment = Assignment(
+        Ticket(
+            "GD1", "TB1", "Fiber", installation_type="Khóa mở dịch vụ IMS",
+        ),
+        ("An",), Decimal("17"), 3,
+        sheet_existing=True,
+    )
+
+    asyncio.run(client.append([assignment]))
+
+    row = client.append_rows.await_args.args[0][0]
+    assert row[-2:] == ["Giao lại", "Khóa mở dịch vụ IMS"]

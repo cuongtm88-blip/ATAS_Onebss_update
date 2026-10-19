@@ -51,6 +51,19 @@ def test_sheet_existing_occurrence_is_appended_as_reassignment_but_not_scored(tm
     assert ledger.scores() == {}
 
 
+def test_installation_type_survives_sheet_outbox_replay(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.db")
+    assignment = ledger.stage(Assignment(
+        Ticket(
+            "GD1", "TB1", "Fiber", installation_type="Khóa mở dịch vụ IMS",
+        ),
+        ("An",), Decimal("17"), 3,
+    ))
+    ledger.mark(assignment, "onebss_saved")
+
+    assert ledger.pending_sheet_rows()[0]["installation_type"] == "Khóa mở dịch vụ IMS"
+
+
 def test_voice_replay_without_matching_old_vip_mode_is_not_marked(tmp_path):
     ledger = Ledger(tmp_path / "ledger.db")
     replay = ledger.stage(

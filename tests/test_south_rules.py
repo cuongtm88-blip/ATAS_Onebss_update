@@ -35,6 +35,12 @@ def test_south_bca_routes_all_requested_locations_and_does_not_match_cap():
     )) is None
 
 
+def test_south_rules_include_leasedline_100ge():
+    rule = next(item for item in SOUTH_RULES if item.service == "Leasedline 100GE")
+    assert rule.sheet_service == "Kênh Thuê Riêng"
+    assert rule.points == Decimal("42")
+
+
 def test_south_sip_first_thirty_go_to_uyen_and_31st_is_balanced_normally():
     tickets = [Ticket(
         "GD", f"TB{i}", "Thuê bao SIP", service_type="Thuê bao SIP",

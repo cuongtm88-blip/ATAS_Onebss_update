@@ -2300,6 +2300,7 @@ class GoogleSheetClient:
                     "labor_address": assignment.ticket.labor_address,
                     "labor_province": assignment.ticket.labor_province,
                     "project_name": assignment.project_name,
+                    "installation_type": assignment.ticket.installation_type,
                     "reassignment": (
                         "Giao lại"
                         if (

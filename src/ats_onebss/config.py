@@ -68,6 +68,19 @@ def load_config(path: str | Path) -> Config:
             else len(configured_sheet_columns)
         )
         configured_sheet_columns.insert(insert_at, "reassignment")
+    # Windows retains Application Support configuration between updates. Add
+    # the new South-only field at load time so existing South installs start
+    # writing column L without replacing any user settings.
+    if (
+        "1vaHpBKhdWvWru8WIGigKEJDAcqngHLahEMxYIoBGi8w" in sheet.get("url", "")
+        and "installation_type" not in configured_sheet_columns
+    ):
+        insert_at = (
+            configured_sheet_columns.index("reassignment") + 1
+            if "reassignment" in configured_sheet_columns
+            else len(configured_sheet_columns)
+        )
+        configured_sheet_columns.insert(insert_at, "installation_type")
     sheet_columns = tuple(configured_sheet_columns)
     required_sheet_columns = (
         "transaction_id", "subscriber_id", "service", "assignee",

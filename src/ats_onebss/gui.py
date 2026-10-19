@@ -96,7 +96,7 @@ from .ingest import INGEST_API_TOKEN_ENV
 
 
 APP_NAME = "ATS OneBSS"
-SOUTH_RULES_BUNDLE_VERSION = "south-rules-2026-10-14-1"
+SOUTH_RULES_BUNDLE_VERSION = "south-rules-2026-10-19-1"
 RESOURCE_FILES = (
     "regions.toml",
     "config.toml",

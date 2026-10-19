@@ -307,9 +307,19 @@ async def collect_plan(
                             )
                         member_group(rules, canonical)
                 else:
-                    if voice_brandname_mode(rule, ticket) == "giam_sat":
-                        # Validate the forced current-state route, not the stale
-                        # assignee recorded when the ticket was first handled.
+                    voice_mode = voice_brandname_mode(rule, ticket)
+                    previous_assignee_is_supervision = any(
+                        normalize(canonical_member_name(rules, assignee))
+                        == normalize("Lê Đức Tuấn")
+                        for assignee in prior_assignees
+                    )
+                    if voice_mode == "giam_sat" or (
+                        voice_mode == "xu_ly"
+                        and previous_assignee_is_supervision
+                    ):
+                        # Validate the current VIP route when it differs from
+                        # the historical owner. A supervision owner cannot be
+                        # used to validate the Xu ly team's eligibility.
                         eligible_members(
                             rule, ticket, config.use_backup_members,
                             excluded_members,

@@ -543,9 +543,26 @@ def test_returned_voice_xu_ly_from_le_duc_tuan_does_not_mark_reassignment():
         [ticket], [_voice_rule()],
         preferred_assignees={"gd1|tb1": ("Lê Đức Tuấn",)},
     )
-    assert result[0].assignees == ("Lê Đức Tuấn",)
+    assert result[0].assignees[0] in {
+        "Đỗ Thị Thu Trang", "Ngô Thùy Trang", "Nguyễn Thị Thu Trang",
+    }
     assert result[0].sheet_existing is True
     assert result[0].sheet_reassignment is False
+
+
+def test_returned_voice_xu_ly_from_supervision_owner_ignores_cohort_pin():
+    ticket = Ticket(
+        "GD1", "TB1", "Voice Brandname", vip_status="Xu ly",
+        customer_name="Khách hàng A", labor_address="Số 1, Lê Lợi",
+    )
+    result = plan_assignments(
+        [ticket], [_voice_rule()],
+        preferred_assignees={"gd1|tb1": ("Lê Đức Tuấn",)},
+    )
+    assert result[0].assignees[0] in {
+        "Đỗ Thị Thu Trang", "Ngô Thùy Trang", "Nguyễn Thị Thu Trang",
+    }
+    assert not result[0].cohort_key
 
 
 def test_percentage_services_use_excel_shares_and_do_not_pin_customer_cohorts():

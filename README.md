@@ -1,10 +1,16 @@
 # ATS OneBSS
 
-## Bản tiêu chuẩn Miền Bắc 0.9.58
+## Bản tiêu chuẩn Miền Bắc 0.9.59
 
 Bản phát hành này lấy mã nguồn từ mốc `v0.9.41`, chỉ bật Miền Bắc và không
 đóng gói cấu hình/workbook của miền khác. Các phiên bản phát hành tiếp theo cho
 Miền Bắc tiếp tục phát triển từ nhánh `release/north-standard-0.9.55`.
+
+Phiên bản 0.9.59 sửa phiếu Voice Brandname giao lại: khi người nhận cũ là Lê Đức
+Tuấn (VIP Giam sat) nhưng VIP hiện tại là Xu ly, ATS chuyển phiếu sang nhóm Xu ly
+thay vì giữ người nhận cũ hoặc bỏ qua do nhân sự xuất hiện ở hai nhóm. Voice
+Brandname được loại khỏi ghim theo nhóm khách hàng/địa chỉ; cột K chỉ đánh dấu
+Giao lại khi trạng thái VIP cũ và mới khớp.
 
 Phiên bản 0.9.58 mặc định các phiếu không xác định được `Loại kênh` vào nhánh
 Liên tỉnh; đồng thời sửa bộ đọc để nhận đúng nhãn `Loại kênh` có dấu hai chấm

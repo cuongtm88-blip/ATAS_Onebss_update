@@ -184,14 +184,9 @@ def plan_assignments(
             seed_rule = match_rule(rules, ticket)
         except RuleError:
             seed_rule = None
-            is_giam_sat = (
-                normalize(ticket.service_type or ticket.service)
-                == normalize("Voice Brandname")
-                and "giam sat" in unaccent(ticket.vip_status)
-            )
-        else:
-            is_giam_sat = voice_brandname_mode(seed_rule, ticket) == "giam_sat"
-        if is_giam_sat:
+        if normalize(ticket.service_type or ticket.service) == normalize(
+            "Voice Brandname"
+        ):
             continue
         if seed_rule is not None and uses_percentage_routing(seed_rule):
             continue
@@ -244,6 +239,10 @@ def plan_assignments(
             if any(normalize(assignee) in excluded for assignee in preferred):
                 continue
         voice_mode = voice_brandname_mode(rule, ticket)
+        previous_assignee_is_supervision = bool(
+            preferred
+            and normalize(preferred[0]) == normalize("Lê Đức Tuấn")
+        )
         # The current VIP state is stronger than Sheet history for supervision.
         # A returned Giam sat ticket must always go to Le Duc Tuan. Replays are
         # still appended as a new row and marked so they do not affect the score.
@@ -258,6 +257,15 @@ def plan_assignments(
             sheet_existing = in_sheet_history and rule.write_to_sheet
             sheet_reassignment = sheet_existing
         elif voice_mode == "giam_sat":
+            groups = eligible_members(
+                rule, ticket, use_backups, excluded_names
+            )
+            project_name = ""
+            sheet_existing = in_sheet_history and rule.write_to_sheet
+        elif voice_mode == "xu_ly" and previous_assignee_is_supervision:
+            # The old owner indicates the prior ticket was Giam sat. If the
+            # current ticket is Xu ly, route it to the processing pool instead
+            # of retaining Lê Đức Tuấn from Sheet history.
             groups = eligible_members(
                 rule, ticket, use_backups, excluded_names
             )
@@ -322,7 +330,7 @@ def plan_assignments(
                 sheet_reassignment = False
         eligible_count = sum(len(members) for members in groups.values())
         cohort_key = (
-            "" if manual_assignee or voice_mode == "giam_sat"
+            "" if manual_assignee or voice_mode in {"xu_ly", "giam_sat"}
             or uses_percentage_routing(rule) else assignment_cohort_key(
                 ticket.customer_name, ticket.labor_address,
                 ticket.service_type or ticket.service,

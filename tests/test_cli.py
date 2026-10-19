@@ -1,11 +1,12 @@
 import asyncio
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 import ats_onebss.cli as cli
-from ats_onebss.models import Ticket
+from ats_onebss.models import Member, ServiceRule, Ticket
 
 
 def test_parser_accepts_multiple_excluded_members():
@@ -23,6 +24,83 @@ def test_parser_accepts_poll_interval_override():
         "--poll-interval-minutes", "7", "run", "--yes",
     ])
     assert args.poll_interval_minutes == 7
+
+
+def test_collect_plan_routes_voice_xu_ly_away_from_old_supervision_owner(
+    monkeypatch,
+):
+    voice_xu_ly = ServiceRule(
+        11, "Voice Brandname", Decimal("20"),
+        'Cột VIP xử lý = "Xu ly"',
+        (
+            Member("Đỗ Thị Thu Trang", "Nhóm 2", "Chính", Decimal("0.34")),
+            Member("Ngô Thùy Trang", "Nhóm 2", "Chính", Decimal("0.33")),
+            Member("Nguyễn Thị Thu Trang", "Nhóm 2", "Chính", Decimal("0.33")),
+        ),
+        "Voice Brandname",
+    )
+    voice_giam_sat = ServiceRule(
+        10, "Voice Brandname", Decimal("20"),
+        'Cột VIP xử lý = "Giam sat"',
+        (Member("Lê Đức Tuấn", "Nhóm 2", "Chính"),), "Voice Brandname",
+    )
+    other_group = ServiceRule(
+        5, "Fiber", Decimal("17"), "",
+        (Member("Lê Đức Tuấn", "Nhóm 1", "Chính"),),
+    )
+    monkeypatch.setattr(
+        cli, "load_rules", lambda _path: [voice_xu_ly, voice_giam_sat, other_group]
+    )
+    monkeypatch.setattr(cli, "load_project_rules", lambda _path: [])
+
+    ticket = Ticket(
+        "TT7/GH/261016/05543", "001541392CNTT", "Voice Brandname",
+        vip_status="Xu ly", customer_name="Khách hàng A",
+        labor_address="Bãi đỗ xe Liên Ninh",
+    )
+
+    class Client:
+        async def visible_tickets(self, *, refresh):
+            assert refresh is True
+            return [ticket]
+
+        async def enrich_ticket_details(self, tickets, _projects, _rules):
+            return tickets
+
+    class FakeLedger:
+        def pending_project_routes(self):
+            return {}
+
+        def manual_overrides(self):
+            return {}
+
+        def service_assignments(self, _year, _month):
+            return {}
+
+        def cohort_assignees(self):
+            return {}
+
+    config = SimpleNamespace(
+        rules_file="rules.xlsx", project_rules_file="projects.toml",
+        excluded_members=(), use_backup_members=False,
+        member_target_ratios={}, timezone="Asia/Ho_Chi_Minh",
+    )
+
+    assignments, skipped, _ = asyncio.run(cli.collect_plan(
+        config, Client(), FakeLedger(),
+        sheet_assignees={
+            "tt7/gh/261016/05543|001541392cntt": ("Lê Đức Tuấn",),
+        },
+        balance_scores={},
+    ))
+
+    assert skipped == []
+    assert len(assignments) == 1
+    assert assignments[0].assignees[0] in {
+        "Đỗ Thị Thu Trang", "Ngô Thùy Trang", "Nguyễn Thị Thu Trang",
+    }
+    assert assignments[0].sheet_existing is True
+    assert assignments[0].sheet_reassignment is False
 
 
 def test_unique_tickets_keeps_only_one_visible_duplicate_per_cycle():

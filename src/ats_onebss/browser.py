@@ -214,10 +214,14 @@ def _sheet_address_matches(value: str, target: str) -> bool:
     return normalized_value in {
         normalized_target,
         f"{normalized_target}:{normalized_target}",
-        # In the MN workbook, Google Sheets selects A482 correctly but
-        # reports the name-box value as A482h. Accept that exact suffix only.
-        f"{normalized_target}H",
     }
+
+
+def _sheet_named_range_alias_matches(value: str, target: str) -> bool:
+    """Recognize the MN sheet's A482h named-range alias for cell A482."""
+    normalized_value = re.sub(r"[^A-Z0-9]", "", value.upper())
+    normalized_target = re.sub(r"[^A-Z0-9]", "", target.upper())
+    return normalized_value == f"{normalized_target}H"
 
 
 def _parse_sheet_timestamp(value: str) -> datetime | None:
@@ -266,6 +270,19 @@ def _is_sheet_data_row(row: list[str]) -> bool:
     if _parse_sheet_timestamp(row[0]) is None:
         return False
     return True
+
+
+def _sheet_next_data_row(rows: list[list[str]], data_start_row: int) -> int:
+    """Return the row after the last physical assignment in an exported CSV."""
+    last_data_row = max(
+        (
+            row_number
+            for row_number, row in enumerate(rows, start=1)
+            if _is_sheet_data_row(row)
+        ),
+        default=data_start_row - 1,
+    )
+    return max(data_start_row, last_data_row + 1)
 
 
 def _sheet_assignment_index(
@@ -2429,10 +2446,12 @@ class GoogleSheetClient:
             if not last_missing:
                 return
 
-            # GViz CSV removes trailing blank rows. Assignment data is kept
-            # contiguous from data_start_row, so its count identifies the
-            # first free physical row without relying on the visible viewport.
-            start_row = self.session.config.sheet_data_start_row + len(existing_data)
+            # Use the final physical assignment row, not the number of rows:
+            # the MN workbook reserves A482 with a named range, so an append
+            # can leave a deliberate blank row in the data area.
+            start_row = _sheet_next_data_row(
+                existing, self.session.config.sheet_data_start_row
+            )
             sheet_rows = [
                 [stamp] + [
                     _sheet_text_input(value)
@@ -2451,48 +2470,73 @@ class GoogleSheetClient:
             await page.wait_for_selector("#docs-editor")
             await page.bring_to_front()
             name_box = await _visible(page.locator("#t-name-box"))
-            target_address = f"A{start_row}"
-            observed_address = ""
-            selected = False
-            # Sheets can take longer than a fixed short delay to commit the
-            # name-box navigation. Never paste until the active address is
-            # confirmed, and retry the navigation before reporting failure.
-            for _selection_attempt in range(3):
-                await name_box.click()
-                select_all = "Control+A" if os.name == "nt" else "Meta+A"
-                await name_box.press(select_all)
-                await name_box.press("Backspace")
-                await name_box.press_sequentially(target_address, delay=80)
-                typed_address = await name_box.input_value()
-                if not _sheet_address_matches(typed_address, target_address):
-                    observed_address = typed_address
-                    continue
-                await name_box.press("Enter")
-                selection_deadline = (
-                    asyncio.get_running_loop().time() + 4
-                )
-                while asyncio.get_running_loop().time() < selection_deadline:
-                    observed_address = await name_box.input_value()
-                    if _sheet_address_matches(observed_address, target_address):
-                        selected = True
+            next_row = start_row
+            for sheet_row in sheet_rows:
+                pasted = False
+                for _candidate_attempt in range(100):
+                    target_address = f"A{next_row}"
+                    observed_address = ""
+                    selected = False
+                    reserved = False
+                    # Commit the target and confirm the actual name-box state.
+                    # A482 resolves to the defined name A482h in the MN sheet;
+                    # skip that reserved cell and try the next physical row.
+                    for _selection_attempt in range(3):
+                        await name_box.click()
+                        select_all = "Control+A" if os.name == "nt" else "Meta+A"
+                        await name_box.press(select_all)
+                        await name_box.press("Backspace")
+                        await name_box.press_sequentially(target_address, delay=80)
+                        typed_address = await name_box.input_value()
+                        if not _sheet_address_matches(typed_address, target_address):
+                            observed_address = typed_address
+                            continue
+                        await name_box.press("Enter")
+                        selection_deadline = asyncio.get_running_loop().time() + 4
+                        while asyncio.get_running_loop().time() < selection_deadline:
+                            observed_address = await name_box.input_value()
+                            if _sheet_address_matches(observed_address, target_address):
+                                selected = True
+                                break
+                            if _sheet_named_range_alias_matches(
+                                observed_address, target_address
+                            ):
+                                reserved = True
+                                break
+                            await asyncio.sleep(0.2)
+                        if selected or reserved:
+                            break
+                    if selected:
+                        tsv = "\t".join(
+                            value.replace("\t", " ").replace("\n", " ")
+                            for value in sheet_row
+                        )
+                        await page.evaluate(
+                            "text => navigator.clipboard.writeText(text)", tsv
+                        )
+                        await page.keyboard.press(
+                            "Control+V" if os.name == "nt" else "Meta+V"
+                        )
+                        await page.wait_for_timeout(400)
+                        next_row += 1
+                        pasted = True
                         break
-                    await asyncio.sleep(0.2)
-                if selected:
-                    break
-            if not selected:
-                raise RuntimeError(
-                    f"Google Sheet không xác nhận được ô {target_address} "
-                    f"(ô tên vùng đang hiển thị: {observed_address!r}); "
-                    "chưa dán dữ liệu."
-                )
-            tsv = "\n".join(
-                "\t".join(
-                    value.replace("\t", " ").replace("\n", " ") for value in row
-                )
-                for row in sheet_rows
-            )
-            await page.evaluate("text => navigator.clipboard.writeText(text)", tsv)
-            await page.keyboard.press("Control+V" if os.name == "nt" else "Meta+V")
+                    if reserved:
+                        print(
+                            f"Bỏ qua ô {target_address} có dải ô được đặt tên "
+                            f"{observed_address}; ghi tiếp ở hàng sau."
+                        )
+                        next_row += 1
+                        continue
+                    raise RuntimeError(
+                        f"Google Sheet không xác nhận được ô {target_address} "
+                        f"(ô tên vùng đang hiển thị: {observed_address!r}); "
+                        "chưa dán dữ liệu."
+                    )
+                if not pasted:
+                    raise RuntimeError(
+                        "Không tìm được hàng trống có thể ghi trong 100 hàng kế tiếp"
+                    )
 
             # Verify only the rows pasted in this attempt. A failed/partial
             # paste is retried at the newly calculated first free row, so a
@@ -2589,7 +2633,11 @@ class GoogleSheetClient:
         )
         await self.activate_sheet(sheet_name)
         rows = await self.export_rows(sheet_name)
-        data_rows = [row for row in rows if _is_sheet_data_row(row)]
+        data_rows = [
+            (physical_row, row)
+            for physical_row, row in enumerate(rows, start=1)
+            if _is_sheet_data_row(row)
+        ]
         transaction_id = record["transaction_id"].strip()
         subscriber_id = _sheet_subscriber_key(record.get("subscriber_id", ""))
         previous = normalize(record["current_assignee"])
@@ -2604,7 +2652,7 @@ class GoogleSheetClient:
             )
 
         matching = [
-            (index, row) for index, row in enumerate(data_rows)
+            (physical_row, row) for physical_row, row in data_rows
             if same_ticket(row)
         ]
         if any(normalize(row[4]) == wanted for _, row in matching):
@@ -2618,7 +2666,7 @@ class GoogleSheetClient:
             raise RuntimeError(
                 "Không tìm thấy dòng Google Sheet tương ứng với người nhận cũ"
             )
-        physical_row = self.session.config.sheet_data_start_row + target[0]
+        physical_row = target[0]
         gid = page.url.rsplit("gid=", 1)[1].split("&", 1)[0].split("#", 1)[0]
         base = self.session.config.sheet_url.split("/edit", 1)[0]
         await page.goto(

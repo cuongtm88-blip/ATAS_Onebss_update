@@ -12,6 +12,8 @@ from ats_onebss.browser import (
     _is_sheet_data_row,
     _sheet_subscriber_key,
     _sheet_address_matches,
+    _sheet_named_range_alias_matches,
+    _sheet_next_data_row,
     _sheet_text_input,
 )
 from ats_onebss.models import Assignment, Ticket
@@ -22,9 +24,17 @@ def test_sheet_address_matches_confirmed_cell_or_single_cell_range():
     assert _sheet_address_matches("A482", "A482")
     assert _sheet_address_matches("$a$482:$a$482", "A482")
     assert _sheet_address_matches("A\u200b482", "A482")
-    assert _sheet_address_matches("A482h", "A482")
-    assert not _sheet_address_matches("A483h", "A482")
+    assert not _sheet_address_matches("A482h", "A482")
     assert not _sheet_address_matches("B484", "A482")
+    assert _sheet_named_range_alias_matches("A482h", "A482")
+    assert not _sheet_named_range_alias_matches("A483h", "A482")
+
+
+def test_sheet_next_data_row_uses_physical_row_after_an_internal_blank():
+    data = ["20/10/2026 15:48", "ID", "", "", "Nguyễn A"]
+    rows = [[] for _ in range(8)] + [data, [], data]
+
+    assert _sheet_next_data_row(rows, 9) == 12
 
 
 def test_sheet_subscriber_key_treats_text_marker_as_blank():

@@ -2456,7 +2456,14 @@ class GoogleSheetClient:
             # confirmed, and retry the navigation before reporting failure.
             for _selection_attempt in range(3):
                 await name_box.click()
-                await name_box.fill(target_address)
+                select_all = "Control+A" if os.name == "nt" else "Meta+A"
+                await name_box.press(select_all)
+                await name_box.press("Backspace")
+                await name_box.press_sequentially(target_address, delay=80)
+                typed_address = await name_box.input_value()
+                if not _sheet_address_matches(typed_address, target_address):
+                    observed_address = typed_address
+                    continue
                 await name_box.press("Enter")
                 selection_deadline = (
                     asyncio.get_running_loop().time() + 4

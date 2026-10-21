@@ -204,6 +204,16 @@ def _sheet_text_input(value: str) -> str:
     return f"'{value}" if value else ""
 
 
+def _sheet_address_matches(value: str, target: str) -> bool:
+    """Check whether the Sheets name box confirms the requested cell."""
+    normalized_value = re.sub(r"\$", "", value).strip().upper()
+    normalized_target = re.sub(r"\$", "", target).strip().upper()
+    return normalized_value in {
+        normalized_target,
+        f"{normalized_target}:{normalized_target}",
+    }
+
+
 def _parse_sheet_timestamp(value: str) -> datetime | None:
     """Parse assignment timestamps as emitted by Sheets, with or without seconds."""
     cleaned = value.strip()
@@ -2433,18 +2443,34 @@ class GoogleSheetClient:
                 wait_until="domcontentloaded",
             )
             await page.wait_for_selector("#docs-editor")
-            await page.wait_for_timeout(800)
             await page.bring_to_front()
             name_box = await _visible(page.locator("#t-name-box"))
-            # The range in the URL can update the name box without giving the
-            # grid keyboard focus. Commit the address explicitly so paste goes
-            # into the selected cell rather than being dropped by Sheets.
-            await name_box.fill(f"A{start_row}")
-            await name_box.press("Enter")
-            await page.wait_for_timeout(250)
-            if await name_box.input_value() != f"A{start_row}":
+            target_address = f"A{start_row}"
+            observed_address = ""
+            selected = False
+            # Sheets can take longer than a fixed short delay to commit the
+            # name-box navigation. Never paste until the active address is
+            # confirmed, and retry the navigation before reporting failure.
+            for _selection_attempt in range(3):
+                await name_box.click()
+                await name_box.fill(target_address)
+                await name_box.press("Enter")
+                selection_deadline = (
+                    asyncio.get_running_loop().time() + 4
+                )
+                while asyncio.get_running_loop().time() < selection_deadline:
+                    observed_address = await name_box.input_value()
+                    if _sheet_address_matches(observed_address, target_address):
+                        selected = True
+                        break
+                    await asyncio.sleep(0.2)
+                if selected:
+                    break
+            if not selected:
                 raise RuntimeError(
-                    f"Google Sheet không có hàng {start_row}; cần bổ sung thêm hàng"
+                    f"Google Sheet không xác nhận được ô {target_address} "
+                    f"(ô tên vùng đang hiển thị: {observed_address or 'trống'}); "
+                    "chưa dán dữ liệu."
                 )
             tsv = "\n".join(
                 "\t".join(

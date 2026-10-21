@@ -11,10 +11,17 @@ from ats_onebss.browser import (
     _sheet_month_scores,
     _is_sheet_data_row,
     _sheet_subscriber_key,
+    _sheet_address_matches,
     _sheet_text_input,
 )
 from ats_onebss.models import Assignment, Ticket
 from ats_onebss.rules import member_score_key
+
+
+def test_sheet_address_matches_confirmed_cell_or_single_cell_range():
+    assert _sheet_address_matches("A482", "A482")
+    assert _sheet_address_matches("$a$482:$a$482", "A482")
+    assert not _sheet_address_matches("B484", "A482")
 
 
 def test_sheet_subscriber_key_treats_text_marker_as_blank():

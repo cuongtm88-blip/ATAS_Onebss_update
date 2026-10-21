@@ -342,19 +342,26 @@ async def collect_plan(
                         excluded_members,
                     )
                 else:
-                    project = match_project_rule(project_rules, ticket)
+                    project = match_project_rule(
+                        project_rules, ticket, rule.service_group
+                    )
                     if project:
                         available = [
                             name for name in project.assignees
                             if normalize(name) not in excluded
                         ]
                         if not available:
-                            ledger.remember_pending_project(
-                                ticket, project.project_name, project.assignee
+                            if project.is_project:
+                                ledger.remember_pending_project(
+                                    ticket, project.project_name, project.assignee
+                                )
+                            route_label = (
+                                f"Dự án {project.project_name}"
+                                if project.is_project
+                                else f"Quy tắc {project.rule_name}"
                             )
                             raise RuleError(
-                                f"{project.project_name}: tất cả nhân sự phụ trách "
-                                "đang nghỉ phép"
+                                f"{route_label}: nhân sự phụ trách đang nghỉ phép"
                             )
                         for assignee in available:
                             member_group(rules, assignee, rule)

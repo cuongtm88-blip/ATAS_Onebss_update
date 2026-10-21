@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ats_onebss.models import Member, ProjectRule, ServiceRule, Ticket
+from ats_onebss.models import Member, ProjectRoute, ProjectRule, ServiceRule, Ticket
 from ats_onebss.planner import plan_assignments
 from ats_onebss.rules import member_score_key
 from ats_onebss.text import assignment_cohort_key
@@ -109,6 +109,34 @@ def test_project_rule_overrides_service_members_and_is_recorded():
     result = plan_assignments([ticket], [rule], project_rules=[project])
     assert result[0].assignees == ("Nguyễn Hoàng Dương",)
     assert result[0].project_name == "Đài THVN"
+
+
+def test_non_project_customer_route_assigns_by_group_without_project_annotation():
+    rule = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (Member("Đào Anh Vũ", "Nhóm 1", "Chính"),),
+        service_group="Mega LT",
+    )
+    special_route = ProjectRule(
+        name="Quy tắc Chứng Khoán",
+        contains="Chứng Khoán",
+        match_fields=("customer_name",),
+        priority=90,
+        route_field="labor_address",
+        routes=(ProjectRoute("Đào Anh Vũ", ("Hà Nội",)),),
+        required_service_groups=("Mega LT", "Mega NT"),
+        is_project=False,
+    )
+    ticket = Ticket(
+        "GD-CK", "TB-CK", "Fiber",
+        customer_name="Công ty Chứng Khoán ABC",
+        labor_address="Điểm lắp đặt tại Hà Nội",
+    )
+
+    result = plan_assignments([ticket], [rule], project_rules=[special_route])
+
+    assert result[0].assignees == ("Đào Anh Vũ",)
+    assert result[0].project_name == ""
 
 
 def test_manual_assignee_overrides_project_rules_and_leave_exclusion_for_one_ticket():

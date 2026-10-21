@@ -265,6 +265,8 @@ def test_demo2_service_map_uses_channel_and_installation_conditions():
     interprovincial = match_rule(
         rules, Ticket("GD2", "TB2", "MegaWan", channel_type="Liên tỉnh")
     )
+    assert local.service_group == "Mega NT"
+    assert interprovincial.service_group == "Mega LT"
     assert local.sheet_service == "Megawan NT"
     assert local.points == Decimal("17")
     assert interprovincial.sheet_service == "Megawan LT"
@@ -725,6 +727,26 @@ def test_kho_bac_nha_nuoc_uses_btc_project_routes():
     assert match is not None
     assert match.project_name == "Dự án BTC"
     assert match.assignee == "Vũ Thế Ninh"
+
+
+@pytest.mark.parametrize("service_group", ["Mega LT", "Mega NT"])
+def test_chung_khoan_special_route_is_not_a_project_and_is_group_limited(service_group):
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    ticket = Ticket(
+        "GD-CK", "TB-CK", "MegaWan",
+        customer_name="Công ty Chứng Khoán ABC",
+        labor_address="Điểm lắp đặt tại Hà Nội",
+    )
+
+    match = match_project_rule(rules, ticket, service_group)
+
+    assert match is not None
+    assert match.assignee == "Đào Anh Vũ"
+    assert match.project_name == ""
+    assert match.is_project is False
+    assert match.rule_name == "Quy tắc Chứng Khoán"
+    assert match_project_rule(rules, ticket, "Fiber") is None
 
 
 def test_hnth_customer_rule_requires_matching_note():

@@ -94,6 +94,11 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
             if str(value).strip()
         )
         points_multiplier = Decimal(str(item.get("points_multiplier", 1)))
+        required_service_groups = tuple(
+            str(value).strip() for value in item.get("required_service_groups", [])
+            if str(value).strip()
+        )
+        is_project = bool(item.get("is_project", True))
         if points_multiplier <= 0:
             raise RuleError(f"Quy tắc {name} phải có points_multiplier lớn hơn 0")
         if not fixed_assignee and not fixed_assignees and (not route_field or not routes):
@@ -117,6 +122,8 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
                 required_contains=required_contains,
                 points_multiplier=points_multiplier,
                 fixed_assignees=fixed_assignees,
+                required_service_groups=required_service_groups,
+                is_project=is_project,
             )
             for contains in contains_values
         )
@@ -124,10 +131,14 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
 
 
 def match_project_rule(
-    project_rules: list[ProjectRule], ticket: Ticket
+    project_rules: list[ProjectRule], ticket: Ticket, service_group: str = ""
 ) -> ProjectMatch | None:
     """Return a named project override, or fail safely for an unknown project area."""
     for rule in project_rules:
+        if rule.required_service_groups and normalize(service_group) not in {
+            normalize(group) for group in rule.required_service_groups
+        }:
+            continue
         values = [unaccent(getattr(ticket, field, "")) for field in rule.match_fields]
         if not any(unaccent(rule.contains) in value for value in values):
             continue
@@ -138,10 +149,15 @@ def match_project_rule(
             continue
         if rule.fixed_assignees:
             return ProjectMatch(
-                rule.name, rule.fixed_assignees[0], rule.fixed_assignees
+                rule.name if rule.is_project else "",
+                rule.fixed_assignees[0], rule.fixed_assignees,
+                rule.is_project, rule.name,
             )
         if rule.fixed_assignee:
-            return ProjectMatch(rule.name, rule.fixed_assignee, (rule.fixed_assignee,))
+            return ProjectMatch(
+                rule.name if rule.is_project else "", rule.fixed_assignee,
+                (rule.fixed_assignee,), rule.is_project, rule.name,
+            )
         route_fields = [rule.route_field]
         # Every routed project uses Địa chỉ LĐ first. If that text does not
         # identify a configured province/city, fall back to the explicit
@@ -162,7 +178,10 @@ def match_project_rule(
                     )
                 )
                 if location_matches and prefix_matches:
-                    return ProjectMatch(rule.name, route.assignee, (route.assignee,))
+                    return ProjectMatch(
+                        rule.name if rule.is_project else "", route.assignee,
+                        (route.assignee,), rule.is_project, rule.name,
+                    )
         shown_value = getattr(ticket, rule.route_field, "")
         raise RuleError(
             f"{rule.name}: không xác định được người nhận từ "
@@ -400,7 +419,7 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
         signatures.add(signature)
         rules.append(ServiceRule(
             base_row, service, points, condition, members, sheet_service,
-            count_points, write_to_sheet, send_to_api,
+            count_points, write_to_sheet, send_to_api, group_name,
         ))
     if not rules:
         raise RuleError("Sheet Group DV không có dòng ánh xạ dịch vụ hợp lệ")

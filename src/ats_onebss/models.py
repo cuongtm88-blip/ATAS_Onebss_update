@@ -23,6 +23,7 @@ class ServiceRule:
     count_points: bool = True
     write_to_sheet: bool = True
     send_to_api: bool = True
+    service_group: str = ""
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,8 @@ class ProjectRule:
     required_contains: tuple[tuple[str, str], ...] = ()
     points_multiplier: Decimal = Decimal(1)
     fixed_assignees: tuple[str, ...] = ()
+    required_service_groups: tuple[str, ...] = ()
+    is_project: bool = True
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,8 @@ class ProjectMatch:
     project_name: str
     assignee: str
     assignees: tuple[str, ...] = ()
+    is_project: bool = True
+    rule_name: str = ""
 
 
 @dataclass(frozen=True)

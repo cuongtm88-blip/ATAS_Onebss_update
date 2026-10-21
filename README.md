@@ -1,6 +1,10 @@
 # ATS OneBSS
 
-## Bản tiêu chuẩn Miền Bắc 0.9.59
+## Bản tiêu chuẩn Miền Bắc 0.9.60
+
+Bản phát hành này thêm quy tắc định tuyến khách hàng Chứng Khoán cho hai Group DV
+`Mega LT` và `Mega NT`. Quy tắc dùng tuyến địa bàn như BCA nhưng không đánh dấu
+phiếu là dự án và không ghi tên dự án vào Google Sheet/API.
 
 Bản phát hành này lấy mã nguồn từ mốc `v0.9.41`, chỉ bật Miền Bắc và không
 đóng gói cấu hình/workbook của miền khác. Các phiên bản phát hành tiếp theo cho
@@ -177,6 +181,9 @@ nhất theo tỷ lệ tải tháng đã chuẩn hóa theo nhóm nhân sự.
   `Cục Viễn Thông & Cơ Yếu Bca`, sau đó định tuyến theo `Địa chỉ LĐ`. Nếu địa chỉ
   không khớp tỉnh/thành đã khai báo, phiếu được đưa vào `preview_skipped.csv` thay
   vì giao theo quy tắc dịch vụ thông thường.
+- Quy tắc `Chứng Khoán`: nếu `Tên KH` chứa `Chứng Khoán` và `Group DV` là
+  `Mega LT` hoặc `Mega NT`, phiếu được định tuyến theo cùng bảng địa bàn như BCA.
+  Đây không phải dự án, nên không ghi tên dự án vào Google Sheet hoặc API.
 - `Dự án BHXH`: nhận diện khi `Tên KH` chứa `Ban Quản Lý Đầu Tư Và Xây Dựng
   Ngành Bảo Hiểm Xã Hội`; dùng cùng bảng định tuyến tỉnh/thành như Dự án BCA.
 - `Dự án Cục BĐTW`: nhận diện khi `Tên KH` chứa `Cục BĐTW` và dùng cùng bảng
@@ -417,7 +424,7 @@ nhiệm vụ `Kiểm tra và xử lý`, rồi sửa người thực hiện tại
 Điểm tháng trong SQLite được chuyển từ người cũ sang người mới để các lượt cân bằng
 tiếp theo dùng đúng số liệu hiện tại.
 
-Quy tắc dự án trong `project_rules.toml` hiện gồm `Đài THVN`, `Cục Quản Trị NHNN - Kênh phục vụ HNTH`, `Dự án BCA`,
+Quy tắc định tuyến trong `project_rules.toml` hiện gồm `Đài THVN`, `Cục Quản Trị NHNN - Kênh phục vụ HNTH`, `Dự án BCA`,
 `Dự án BHXH`, `Dự án Cục BĐTW`, `Dự án BTC` và `Dự án Vietlott`. Các dự án được nhận diện
 theo `Tên KH`; định tuyến theo `Địa chỉ LĐ` và dự phòng bằng `Tỉnh LĐ` khi địa
 chỉ chính không xác định được tỉnh/thành. Riêng Vietlott tách Tuyên Quang theo

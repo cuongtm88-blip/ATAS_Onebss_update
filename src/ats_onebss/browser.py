@@ -206,8 +206,11 @@ def _sheet_text_input(value: str) -> str:
 
 def _sheet_address_matches(value: str, target: str) -> bool:
     """Check whether the Sheets name box confirms the requested cell."""
-    normalized_value = re.sub(r"\$", "", value).strip().upper()
-    normalized_target = re.sub(r"\$", "", target).strip().upper()
+    # Sheets may leave zero-width/control characters in the canvas-backed
+    # name box value. They are invisible in the UI and ordinary strip() keeps
+    # them, which made a displayed "A482" fail an exact comparison.
+    normalized_value = re.sub(r"[^A-Z0-9:]", "", value.upper())
+    normalized_target = re.sub(r"[^A-Z0-9:]", "", target.upper())
     return normalized_value in {
         normalized_target,
         f"{normalized_target}:{normalized_target}",
@@ -2469,7 +2472,7 @@ class GoogleSheetClient:
             if not selected:
                 raise RuntimeError(
                     f"Google Sheet không xác nhận được ô {target_address} "
-                    f"(ô tên vùng đang hiển thị: {observed_address or 'trống'}); "
+                    f"(ô tên vùng đang hiển thị: {observed_address!r}); "
                     "chưa dán dữ liệu."
                 )
             tsv = "\n".join(

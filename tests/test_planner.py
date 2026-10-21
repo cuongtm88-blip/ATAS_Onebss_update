@@ -41,6 +41,50 @@ def test_dual_group_employee_is_balanced_against_current_service_group():
     assert assigned["SMS Brandname"] == ("Lê Đức Tuấn",)
 
 
+def test_mega_lt_connection_reference_keeps_linked_customer_tickets_together():
+    rule = ServiceRule(
+        3, "MegaWan LT", Decimal("2"), "",
+        (Member("An", "Nhóm 1", "Chính"), Member("Bình", "Nhóm 1", "Chính")),
+        service_group="Mega LT",
+    )
+    tickets = [
+        Ticket(
+            "GD-1", "mwk0012u9", "MegaWan LT", "MegaWan LT",
+            customer_name="Công ty FPT", connection_reference="mwk0012tz",
+        ),
+        Ticket("GD-2", "mwk0012tz", "MegaWan LT", "MegaWan LT", customer_name="Công ty FPT"),
+    ]
+
+    assignments = plan_assignments(tickets, [rule])
+
+    assert len(assignments) == 2
+    assert assignments[0].assignees == assignments[1].assignees
+    assert assignments[0].cohort_key == assignments[1].cohort_key
+
+
+def test_mega_connection_reference_does_not_pair_different_customers_or_groups():
+    mega_lt = ServiceRule(
+        3, "MegaWan LT", Decimal("2"), "",
+        (Member("An", "Nhóm 1", "Chính"), Member("Bình", "Nhóm 1", "Chính")),
+        service_group="Mega LT",
+    )
+    mega_nt = ServiceRule(
+        4, "MegaWan NT", Decimal("2"), "",
+        (Member("An", "Nhóm 1", "Chính"), Member("Bình", "Nhóm 1", "Chính")),
+        service_group="Mega NT",
+    )
+    tickets = [
+        Ticket("GD-1", "TB-A", "MegaWan LT", "MegaWan LT", customer_name="KH A", connection_reference="TB-B"),
+        Ticket("GD-2", "TB-B", "MegaWan LT", "MegaWan LT", customer_name="KH B"),
+        Ticket("GD-3", "TB-C", "MegaWan NT", "MegaWan NT", customer_name="KH A"),
+    ]
+
+    assignments = plan_assignments(tickets, [mega_lt, mega_nt])
+
+    assert len(assignments) == 3
+    assert all(not item.cohort_key.startswith("connection-pair") for item in assignments)
+
+
 def test_balances_points_and_splits_between_groups():
     rule = ServiceRule(
         3,

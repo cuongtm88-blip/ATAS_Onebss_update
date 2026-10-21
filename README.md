@@ -1,5 +1,12 @@
 # ATS OneBSS
 
+## Bản tiêu chuẩn Miền Bắc 0.9.61
+
+Phiên bản 0.9.61 ghép các phiếu cùng Tên KH thuộc Group DV `Mega LT` hoặc
+`Mega NT` khi trường `Hướng kết nối` của một phiếu chứa Mã thuê bao của phiếu
+khác. Các phiếu ghép cặp dùng chung người thực hiện; người nhận lịch sử được
+ưu tiên nếu vẫn đủ điều kiện theo quy tắc hiện hành.
+
 ## Bản tiêu chuẩn Miền Bắc 0.9.60
 
 Bản phát hành này thêm quy tắc định tuyến khách hàng Chứng Khoán cho hai Group DV

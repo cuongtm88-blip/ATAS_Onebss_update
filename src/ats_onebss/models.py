@@ -73,6 +73,7 @@ class Ticket:
     notes: str = ""
     labor_address: str = ""
     connection_address: str = ""
+    connection_reference: str = ""
     labor_province: str = ""
     raw: dict[str, str] = field(default_factory=dict, compare=False)
 

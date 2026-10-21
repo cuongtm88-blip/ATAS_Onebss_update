@@ -22,7 +22,7 @@ from playwright.async_api import BrowserContext, Locator, Page, async_playwright
 
 from .config import Config
 from .models import Assignment, ProjectRule, ServiceRule, Ticket
-from .rules import member_score_key
+from .rules import RuleError, match_rule, member_score_key
 from .text import normalize, ticket_identity, unaccent
 
 
@@ -824,7 +824,7 @@ class OneBSSClient:
     def __init__(self, session: BrowserSession):
         self.session = session
         self.page: Page | None = None
-        self._ticket_details: dict[str, tuple[str, str, str, str, str, str, str]] = {}
+        self._ticket_details: dict[str, tuple[str, str, str, str, str, str, str, str]] = {}
         self._ticket_response_payload: object = None
         self._page_size = 500
         self._page_size_announced = False
@@ -1498,6 +1498,14 @@ class OneBSSClient:
             for rule in (service_rules or [])
             if "loai kenh" in unaccent(rule.condition)
         }
+        linked_service_tickets: set[str] = set()
+        for ticket in tickets:
+            try:
+                rule = match_rule(service_rules or [], ticket)
+            except RuleError:
+                continue
+            if normalize(rule.service_group) in {normalize("Mega LT"), normalize("Mega NT")}:
+                linked_service_tickets.add(ticket.key)
         for ticket in tickets:
             if not ticket.labor_province:
                 ticket = replace(
@@ -1542,6 +1550,10 @@ class OneBSSClient:
                 normalize(ticket.service) in channel_services
                 and not ticket.channel_type
             )
+            needs_connection_reference = (
+                ticket.key in linked_service_tickets
+                and not ticket.connection_reference
+            )
             if (
                 not requires_detail_project_verification
                 and not needs_customer
@@ -1549,6 +1561,7 @@ class OneBSSClient:
                 and not needs_address
                 and not needs_notes
                 and not needs_channel
+                and not needs_connection_reference
             ):
                 # On this OneBSS screen Tên thuê bao is the grid rendering of
                 # the detail field Tên KH. Avoid reopening every unrelated row.
@@ -1572,10 +1585,13 @@ class OneBSSClient:
                 notes = ""
                 labor_address = ""
                 connection_address = ""
+                connection_reference = ""
                 channel_type = ticket.channel_type
                 if details_match:
                     if needs_channel:
                         channel_type = await self._technical_value("Loại kênh")
+                    if needs_connection_reference:
+                        connection_reference = await self._technical_value("Hướng kết nối")
                     # OneBSS populates the detail form asynchronously after
                     # selection. Poll the actual Tên KH field instead of
                     # assuming one fixed delay is sufficient.
@@ -1604,6 +1620,9 @@ class OneBSSClient:
                     notes = await self._detail_value("Ghi chú")
                     labor_address = await self._detail_value("Địa chỉ LĐ")
                     connection_address = ticket.connection_address
+                    connection_reference = (
+                        connection_reference or ticket.connection_reference
+                    )
                 else:
                     customer_name = customer_name or ticket.customer_name
                     subscriber_name = (
@@ -1618,6 +1637,13 @@ class OneBSSClient:
                         await self._detail_value("Địa chỉ LĐ") if details_match else ""
                     ) or ticket.labor_address
                     connection_address = ticket.connection_address
+                    if details_match:
+                        connection_reference = (
+                            connection_reference or await self._technical_value("Hướng kết nối")
+                            if ticket.key in linked_service_tickets else ""
+                        )
+                    else:
+                        connection_reference = ticket.connection_reference
                 labor_province = ticket.labor_province or _province_from_address(
                     labor_address
                 )
@@ -1628,6 +1654,7 @@ class OneBSSClient:
                     notes,
                     labor_address,
                     connection_address,
+                    connection_reference,
                     labor_province,
                     channel_type,
                 )
@@ -1639,6 +1666,7 @@ class OneBSSClient:
                 notes,
                 labor_address,
                 connection_address,
+                connection_reference,
                 labor_province,
                 channel_type,
             ) = cached
@@ -1650,6 +1678,7 @@ class OneBSSClient:
                     notes=notes,
                     labor_address=labor_address,
                     connection_address=connection_address,
+                    connection_reference=connection_reference,
                     labor_province=labor_province,
                     channel_type=channel_type,
                 )

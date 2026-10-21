@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import re
 
 from .models import Assignment, ProjectRule, ServiceRule, Ticket
 from .rules import (
@@ -179,6 +180,47 @@ def plan_assignments(
     # preserve its recorded assignee as the cohort anchor unless we already
     # have a successful assignment saved locally.
     sheet_cohort_pins: dict[str, str] = {}
+    # Mega LT/NT tickets can represent two points for the same customer when
+    # one ticket's Hướng kết nối names the other ticket's subscriber ID.
+    # Pair only unique subscriber matches within the same customer and group.
+    connection_pair_keys: dict[str, str] = {}
+    eligible_for_pairing: list[tuple[Ticket, str]] = []
+    for ticket in tickets:
+        try:
+            rule = match_rule(rules, ticket)
+        except RuleError:
+            continue
+        group = normalize(rule.service_group)
+        customer = normalize(ticket.customer_name)
+        subscriber = normalize(ticket.subscriber_id)
+        if group in {normalize("Mega LT"), normalize("Mega NT")} and customer and subscriber:
+            eligible_for_pairing.append((ticket, group))
+    paired: set[str] = set()
+    for ticket, group in eligible_for_pairing:
+        reference = normalize(ticket.connection_reference)
+        if not reference:
+            continue
+        candidates_for_reference = [
+            other for other, other_group in eligible_for_pairing
+            if other.key != ticket.key
+            and other_group == group
+            and normalize(other.customer_name) == normalize(ticket.customer_name)
+            and re.search(
+                rf"(?<![a-z0-9]){re.escape(normalize(other.subscriber_id))}(?![a-z0-9])",
+                reference,
+            )
+        ]
+        if len(candidates_for_reference) != 1:
+            continue
+        other = candidates_for_reference[0]
+        pair = tuple(sorted((ticket.key, other.key)))
+        if ticket.key in paired or other.key in paired:
+            continue
+        customer_key = normalize(ticket.customer_name)
+        pair_key = "\x1f".join(("connection-pair", group, customer_key, *pair))
+        connection_pair_keys[ticket.key] = pair_key
+        connection_pair_keys[other.key] = pair_key
+        paired.update(pair)
     for ticket in tickets:
         try:
             seed_rule = match_rule(rules, ticket)
@@ -190,7 +232,7 @@ def plan_assignments(
             continue
         if seed_rule is not None and uses_percentage_routing(seed_rule):
             continue
-        key = assignment_cohort_key(
+        key = connection_pair_keys.get(ticket.key) or assignment_cohort_key(
             ticket.customer_name, ticket.labor_address,
             ticket.service_type or ticket.service,
         )
@@ -338,7 +380,7 @@ def plan_assignments(
             else:
                 sheet_reassignment = False
         eligible_count = sum(len(members) for members in groups.values())
-        cohort_key = (
+        cohort_key = connection_pair_keys.get(ticket.key) or (
             "" if manual_assignee or voice_mode in {"xu_ly", "giam_sat"}
             or uses_percentage_routing(rule) else assignment_cohort_key(
                 ticket.customer_name, ticket.labor_address,

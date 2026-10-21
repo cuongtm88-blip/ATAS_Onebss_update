@@ -14,7 +14,7 @@ from ats_onebss.browser import (
     _row_matches_ticket,
     _ticket_metadata_from_api,
 )
-from ats_onebss.models import ProjectRoute, ProjectRule, Ticket
+from ats_onebss.models import ProjectRoute, ProjectRule, ServiceRule, Ticket
 
 
 def test_detail_row_identity_requires_exact_transaction_and_subscriber_ids():
@@ -128,6 +128,38 @@ def test_channel_type_is_read_from_verified_ticket_technical_panel():
     enriched, client = asyncio.run(run())
     assert enriched.channel_type == "Nội Tỉnh"
     client._technical_value.assert_awaited_once_with("Loại kênh")
+
+
+def test_mega_connection_reference_is_read_from_verified_technical_panel():
+    class Cells:
+        async def evaluate_all(self, _script):
+            return [
+                {"text": "GD-1", "label": "GD-1 column header Mã giao dịch bán"},
+                {"text": "TB-1", "label": "TB-1 column header Mã thuê bao bán"},
+            ]
+
+    class Row:
+        click = AsyncMock()
+
+        def locator(self, selector):
+            assert selector == "td"
+            return Cells()
+
+    async def run():
+        client = OneBSSClient(SimpleNamespace())
+        client.page = SimpleNamespace(wait_for_timeout=AsyncMock())
+        client._ticket_row = AsyncMock(return_value=Row())
+        client._wait_for_ticket_detail = AsyncMock(return_value=True)
+        client._detail_value = AsyncMock(return_value="Customer")
+        client._technical_value = AsyncMock(return_value="mwk0012tz")
+        ticket = Ticket("GD-1", "TB-1", "MegaWan LT", customer_name="Customer")
+        rule = ServiceRule(3, "MegaWan LT", 2, "", (), service_group="Mega LT")
+        result = await client.enrich_ticket_details([ticket], [], [rule])
+        return result[0], client
+
+    enriched, client = asyncio.run(run())
+    assert enriched.connection_reference == "mwk0012tz"
+    client._technical_value.assert_awaited_once_with("Hướng kết nối")
 
 
 def test_project_details_wait_for_form_to_refresh_instead_of_using_previous_ticket():

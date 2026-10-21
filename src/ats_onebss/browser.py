@@ -214,6 +214,9 @@ def _sheet_address_matches(value: str, target: str) -> bool:
     return normalized_value in {
         normalized_target,
         f"{normalized_target}:{normalized_target}",
+        # In the MN workbook, Google Sheets selects A482 correctly but
+        # reports the name-box value as A482h. Accept that exact suffix only.
+        f"{normalized_target}H",
     }
 
 

@@ -22,6 +22,8 @@ def test_sheet_address_matches_confirmed_cell_or_single_cell_range():
     assert _sheet_address_matches("A482", "A482")
     assert _sheet_address_matches("$a$482:$a$482", "A482")
     assert _sheet_address_matches("A\u200b482", "A482")
+    assert _sheet_address_matches("A482h", "A482")
+    assert not _sheet_address_matches("A483h", "A482")
     assert not _sheet_address_matches("B484", "A482")
 
 

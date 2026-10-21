@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import threading
+import tomllib
 import unicodedata
 from dataclasses import replace
 from datetime import datetime
@@ -119,6 +120,78 @@ def user_data_root() -> Path:
     return Path.home() / ".config" / "ATS-OneBSS"
 
 
+def sync_missing_project_rules(runtime_path: Path, packaged_path: Path) -> Path | None:
+    """Append bundled rules absent from the user's preserved project config.
+
+    Existing same-named rules remain user-owned and are never overwritten.
+    The original file is backed up before adding any new bundled rule blocks.
+    """
+    runtime_path = Path(runtime_path)
+    packaged_path = Path(packaged_path)
+    if (
+        not runtime_path.is_file()
+        or not packaged_path.is_file()
+        or runtime_path.resolve() == packaged_path.resolve()
+    ):
+        return None
+    runtime_text = runtime_path.read_text(encoding="utf-8-sig")
+    packaged_text = packaged_path.read_text(encoding="utf-8-sig")
+    try:
+        runtime_data = tomllib.loads(runtime_text)
+        packaged_data = tomllib.loads(packaged_text)
+    except tomllib.TOMLDecodeError:
+        return None
+    def rule_name_key(value: object) -> str:
+        return unicodedata.normalize("NFC", str(value or "")).strip().casefold()
+
+    existing_names = {
+        rule_name_key(item.get("name", ""))
+        for item in runtime_data.get("projects", [])
+        if item.get("name")
+    }
+    blocks = list(re.finditer(r"(?m)^\[\[projects\]\]\s*$", packaged_text))
+    if len(blocks) != len(packaged_data.get("projects", [])):
+        return None
+    additions: list[str] = []
+    for index, match in enumerate(blocks):
+        end = blocks[index + 1].start() if index + 1 < len(blocks) else len(packaged_text)
+        block = packaged_text[match.start():end].strip()
+        try:
+            parsed = tomllib.loads(block)
+        except tomllib.TOMLDecodeError:
+            return None
+        items = parsed.get("projects", [])
+        if len(items) != 1:
+            return None
+        name = rule_name_key(items[0].get("name", ""))
+        if name and name not in existing_names:
+            additions.append(block)
+    # A malformed/partial packaged file should not silently erase custom data.
+    if len(runtime_data.get("projects", [])) and not blocks:
+        return None
+    if not additions:
+        return None
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup = runtime_path.with_name(f"{runtime_path.name}.backup-{stamp}")
+    suffix = 1
+    while backup.exists():
+        backup = runtime_path.with_name(f"{runtime_path.name}.backup-{stamp}-{suffix}")
+        suffix += 1
+    staging = runtime_path.with_name(f".{runtime_path.name}.syncing")
+    shutil.copy2(runtime_path, backup)
+    try:
+        updated = runtime_text.rstrip() + "\n\n" + "\n\n".join(additions) + "\n"
+        # Validate the merged TOML before atomically replacing the runtime copy.
+        tomllib.loads(updated)
+        staging.write_text(updated, encoding="utf-8")
+        staging.replace(runtime_path)
+    finally:
+        if staging.exists():
+            staging.unlink()
+    return backup
+
+
 def editable_rules_file() -> Path | None:
     """Return a newer Excel rule file kept beside a development .app bundle."""
     if not getattr(sys, "frozen", False):
@@ -153,6 +226,9 @@ def prepare_runtime_root() -> Path:
         if source_file.exists() and not target_file.exists():
             target_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_file, target_file)
+    sync_missing_project_rules(
+        target / "project_rules.toml", source / "project_rules.toml"
+    )
     # In the development layout the editable file is next to ``dist`` while
     # the running app reads its private Application Support copy.  Refresh
     # only when that editable source is newer, so a manual runtime adjustment

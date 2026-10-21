@@ -749,6 +749,41 @@ def test_chung_khoan_special_route_is_not_a_project_and_is_group_limited(service
     assert match_project_rule(rules, ticket, "Fiber") is None
 
 
+def test_hvs_chung_khoan_mega_lt_ticket_uses_hanoi_special_route():
+    rules = load_project_rules(Path(__file__).parents[1] / "project_rules.toml")
+    ticket = Ticket(
+        "TH6/LD/261021/01863", "mwk0013nn", "Megawan LT",
+        customer_name="Công Ty Cổ Phần Chứng Khoán HVS Việt Nam",
+        labor_address=(
+            "IDC Nguyễn Phong Sắc, Phường Cầu Giấy, Thành phố Hà Nội"
+        ),
+    )
+
+    match = match_project_rule(rules, ticket, "Mega LT")
+
+    assert match is not None
+    assert match.assignee == "Đào Anh Vũ"
+    assert match.project_name == ""
+    assert match.rule_name == "Quy tắc Chứng Khoán"
+
+
+def test_vietnam_cable_television_customer_uses_bca_routes_without_project_label():
+    rules = load_project_rules(Path(__file__).parents[1] / "project_rules.toml")
+    ticket = Ticket(
+        "GD-VTV-CAB", "TB-VTV-CAB", "Fiber",
+        customer_name="Tổng Công Ty Truyền Hình Cáp Việt Nam",
+        labor_address="Điểm lắp đặt tại Hà Nội",
+    )
+
+    match = match_project_rule(rules, ticket)
+
+    assert match is not None
+    assert match.assignee == "Đào Anh Vũ"
+    assert match.project_name == ""
+    assert match.is_project is False
+    assert match.rule_name == "Quy tắc Tổng Công Ty Truyền Hình Cáp Việt Nam"
+
+
 def test_hnth_customer_rule_requires_matching_note():
     rules = load_project_rules(Path(__file__).parents[1] / "project_rules.toml")
     ticket = Ticket(

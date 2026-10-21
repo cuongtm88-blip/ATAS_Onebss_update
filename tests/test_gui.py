@@ -159,6 +159,52 @@ def test_prepare_runtime_root_refreshes_newer_editable_rules(monkeypatch, tmp_pa
     assert runtime_rules.read_text(encoding="utf-8") == "new editable"
 
 
+def test_project_rule_sync_adds_missing_bundled_rules_without_replacing_user_rules(tmp_path):
+    runtime = tmp_path / "runtime-projects.toml"
+    packaged = tmp_path / "bundled-projects.toml"
+    original = '''[[projects]]
+name = "Dự án BCA"
+priority = 1
+match_fields = ["customer_name"]
+contains = "BCA tùy chỉnh"
+fixed_assignee = "Người dùng"
+'''
+    runtime.write_text(original, encoding="utf-8")
+    packaged.write_text('''[[projects]]
+name = "Dự án BCA"
+priority = 90
+match_fields = ["customer_name"]
+contains = "BCA mặc định"
+fixed_assignee = "Người mặc định"
+
+[[projects]]
+name = "Quy tắc Chứng Khoán"
+priority = 90
+is_project = false
+match_fields = ["customer_name"]
+contains = "Chứng Khoán"
+fixed_assignee = "Đào Anh Vũ"
+
+[[projects]]
+name = "Quy tắc Truyền Hình Cáp"
+priority = 90
+is_project = false
+match_fields = ["customer_name"]
+contains = "Truyền Hình Cáp Việt Nam"
+fixed_assignee = "Đào Anh Vũ"
+''', encoding="utf-8")
+
+    backup = gui.sync_missing_project_rules(runtime, packaged)
+
+    assert backup is not None
+    assert backup.read_text(encoding="utf-8") == original
+    merged = gui.load_project_rules(runtime)
+    assert next(rule for rule in merged if rule.name == "Dự án BCA").contains == "BCA tùy chỉnh"
+    assert {rule.name for rule in merged} == {
+        "Dự án BCA", "Quy tắc Chứng Khoán", "Quy tắc Truyền Hình Cáp",
+    }
+
+
 def test_install_rules_file_validates_replaces_and_keeps_backup(tmp_path):
     source = gui.resource_root() / "Giao phiếu.xlsx"
     target = tmp_path / "Giao phiếu.xlsx"

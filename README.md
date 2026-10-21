@@ -1,5 +1,13 @@
 # ATS OneBSS
 
+## Bản tiêu chuẩn Miền Bắc 0.9.62
+
+Phiên bản 0.9.62 sửa lỗi quy tắc Chứng Khoán không được dùng khi bản cấu hình
+trong Application Support cũ còn thiếu quy tắc đó. Khi khởi động, app bổ sung
+các quy tắc còn thiếu từ gói mới, giữ nguyên quy tắc người dùng đã có và sao lưu
+file trước khi cập nhật. Bổ sung quy tắc không phải dự án cho `Tổng Công Ty
+Truyền Hình Cáp Việt Nam`, định tuyến theo cùng bảng địa bàn như BCA.
+
 ## Bản tiêu chuẩn Miền Bắc 0.9.61
 
 Phiên bản 0.9.61 ghép các phiếu cùng Tên KH thuộc Group DV `Mega LT` hoặc
@@ -188,6 +196,9 @@ nhất theo tỷ lệ tải tháng đã chuẩn hóa theo nhóm nhân sự.
   `Cục Viễn Thông & Cơ Yếu Bca`, sau đó định tuyến theo `Địa chỉ LĐ`. Nếu địa chỉ
   không khớp tỉnh/thành đã khai báo, phiếu được đưa vào `preview_skipped.csv` thay
   vì giao theo quy tắc dịch vụ thông thường.
+- Quy tắc `Tổng Công Ty Truyền Hình Cáp Việt Nam`: nếu `Tên KH` chứa chuỗi này,
+  phiếu được định tuyến theo cùng bảng địa bàn như BCA. Đây không phải dự án,
+  nên không ghi tên dự án vào Google Sheet hoặc API.
 - Quy tắc `Chứng Khoán`: nếu `Tên KH` chứa `Chứng Khoán` và `Group DV` là
   `Mega LT` hoặc `Mega NT`, phiếu được định tuyến theo cùng bảng địa bàn như BCA.
   Đây không phải dự án, nên không ghi tên dự án vào Google Sheet hoặc API.
@@ -432,6 +443,7 @@ nhiệm vụ `Kiểm tra và xử lý`, rồi sửa người thực hiện tại
 tiếp theo dùng đúng số liệu hiện tại.
 
 Quy tắc định tuyến trong `project_rules.toml` hiện gồm `Đài THVN`, `Cục Quản Trị NHNN - Kênh phục vụ HNTH`, `Dự án BCA`,
+quy tắc Tổng Công Ty Truyền Hình Cáp Việt Nam và Chứng Khoán (không phải dự án),
 `Dự án BHXH`, `Dự án Cục BĐTW`, `Dự án BTC` và `Dự án Vietlott`. Các dự án được nhận diện
 theo `Tên KH`; định tuyến theo `Địa chỉ LĐ` và dự phòng bằng `Tỉnh LĐ` khi địa
 chỉ chính không xác định được tỉnh/thành. Riêng Vietlott tách Tuyên Quang theo

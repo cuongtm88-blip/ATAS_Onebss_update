@@ -18,6 +18,7 @@ class Config:
     browser_channel: str
     task: str
     batch_size: int
+    read_batch_size: int | None
     timeout_ms: int
     rules_file: Path
     project_rules_file: Path | None
@@ -113,6 +114,15 @@ def load_config(path: str | Path) -> Config:
             return candidate.resolve()
         return match.resolve()
     project_rules_value = rules.get("projects_file", "project_rules.toml")
+    read_batch_value = onebss.get("read_batch_size")
+    if read_batch_value is None and (
+        "1vaHpBKhdWvWru8WIGigKEJDAcqngHLahEMxYIoBGi8w"
+        in sheet.get("url", "")
+    ):
+        # Existing Windows installs keep their Application Support config
+        # across updates, so apply the South default even when that file
+        # predates the new packaged setting.
+        read_batch_value = 50
     return Config(
         root=root,
         onebss_url=onebss["url"],
@@ -121,6 +131,9 @@ def load_config(path: str | Path) -> Config:
         browser_channel=onebss.get("browser_channel", "chrome"),
         task=onebss.get("task", "Kiểm tra và xử lý"),
         batch_size=int(onebss.get("batch_size", 20)),
+        read_batch_size=(
+            max(1, int(read_batch_value)) if read_batch_value is not None else None
+        ),
         timeout_ms=int(onebss.get("timeout_ms", 30_000)),
         rules_file=resolve(rules["file"]),
         project_rules_file=(

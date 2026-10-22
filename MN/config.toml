@@ -5,6 +5,7 @@ headless = false
 browser_channel = "chrome"
 task = "Kiểm tra và xử lý"
 batch_size = 20
+read_batch_size = 50
 timeout_ms = 30000
 
 [rules]

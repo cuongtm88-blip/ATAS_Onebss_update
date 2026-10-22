@@ -76,6 +76,65 @@ def test_workbook_without_api_column_preserves_legacy_api_behavior(tmp_path):
     assert all(rule.send_to_api for rule in rules)
 
 
+def test_group_rule_accepts_added_installation_type_option_and_legacy_map_condition(tmp_path):
+    workbook = Workbook()
+    rule_sheet = workbook.active
+    rule_sheet.title = "Quy tắc giao phiếu"
+    rule_sheet.append([None, None, None, None, "Nhóm 1"])
+    rule_sheet.append(["STT", "Group DV", "Điểm quy đổi", "Quy tắc", "An"])
+    rule_sheet.append([
+        1,
+        "Tên miền triển khai TDTT",
+        14,
+        "Kiểu lắp đặt: Thay đổi thông tin DV CNTT/GTGT, "
+        "Yêu cầu Vip hỗ trợ: TTKD-Vip-TTKD - Không thay đổi TTKH",
+        1,
+    ])
+    map_sheet = workbook.create_sheet("Group DV")
+    map_sheet.append([
+        "STT", "Dịch vụ", "Dịch vụ trên Google Sheet", "Điểm quy đổi",
+        "Quy tắc group", "Group DV",
+    ])
+    legacy_condition = "Kiểu lắp đặt: Thay đổi thông tin DV CNTT/GTGT"
+    map_sheet.append([
+        1, "Tên miền Việt Nam", "Tên Miền Việt Nam (Triển khai)", 14,
+        legacy_condition, "Tên miền triển khai TDTT",
+    ])
+    map_sheet.append([
+        2, "Tên miền Quốc tế", "Tên Miền Quốc Tế (Triển khai)", 14,
+        legacy_condition, "Tên miền triển khai TDTT",
+    ])
+    path = tmp_path / "domain-vip-support.xlsx"
+    workbook.save(path)
+
+    rules = load_rules(path)
+    regular = match_rule(
+        rules,
+        Ticket(
+            "GD1", "TB1", "Tên miền Việt Nam",
+            installation_type="Thay đổi thông tin DV CNTT/GTGT",
+        ),
+    )
+    vip_support = match_rule(
+        rules,
+        Ticket(
+            "GD2", "TB2", "Tên miền Quốc tế",
+            installation_type=(
+                "Yêu cầu Vip hỗ trợ: TTKD-Vip-TTKD - Không thay đổi TTKH"
+            ),
+        ),
+    )
+
+    assert regular.service_group == "Tên miền triển khai TDTT"
+    assert vip_support.service_group == "Tên miền triển khai TDTT"
+    assert regular.points == vip_support.points == Decimal("14")
+    with pytest.raises(RuleError, match="Không tìm thấy quy tắc"):
+        match_rule(
+            rules,
+            Ticket("GD3", "TB3", "Tên miền Việt Nam", installation_type="Khác"),
+        )
+
+
 def test_current_workbook_contains_leasedline_ge():
     workbook = Path(__file__).parents[1] / "Giao phiếu.xlsx"
     rule = next(item for item in load_rules(workbook) if item.service == "Leasedline GE")

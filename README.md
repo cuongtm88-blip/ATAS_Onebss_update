@@ -1,5 +1,13 @@
 # ATS OneBSS
 
+## Bản tiêu chuẩn Miền Bắc 0.9.63
+
+Phiên bản 0.9.63 cho phép điều kiện của một dịch vụ trong sheet `Group DV` là
+tập con các lựa chọn `Kiểu lắp đặt` khai báo ở dòng Group DV chính. Nhờ đó,
+Group `Tên miền triển khai TDTT` tiếp tục nhận diện kiểu lắp đặt
+`Thay đổi thông tin DV CNTT/GTGT` và bổ sung lựa chọn
+`Yêu cầu Vip hỗ trợ: TTKD-Vip-TTKD - Không thay đổi TTKH`.
+
 ## Bản tiêu chuẩn Miền Bắc 0.9.62
 
 Phiên bản 0.9.62 sửa lỗi quy tắc Chứng Khoán không được dùng khi bản cấu hình
@@ -234,7 +242,7 @@ nhất theo tỷ lệ tải tháng đã chuẩn hóa theo nhóm nhân sự.
   Google Sheet. Với phiếu giao lại, người nhận cũ Lê Đức Tuấn được xem là `Giam sat`,
   người khác là `Xu ly`; cột K chỉ ghi `Giao lại` nếu trạng thái hiện tại giống
   trạng thái suy ra từ người nhận cũ. VIP trống/không nhận diện được sẽ bị bỏ qua.
-- Tên miền áp dụng điểm theo `Loại HĐ`; MegaWan/MetroNet áp dụng theo `Loại kênh`.
+- Tên miền áp dụng điểm theo `Kiểu lắp đặt`; MegaWan/MetroNet áp dụng theo `Loại kênh`.
 - `Thoại quốc tế` vẫn được giao cho Trần Mạnh Cường theo file Excel, nhưng có
   điểm bằng 0 và không được ghi vào Google Sheet. Dòng lịch sử trên Sheet không
   được dùng để thay đổi người nhận của dịch vụ đặc biệt này.

@@ -2492,39 +2492,72 @@ class GoogleSheetClient:
             raise RuntimeError("Dòng đồng bộ lịch phải có đúng 11 cột.")
         page = self.page or await self.open()
         await self.activate_sheet(sheet_name)
-        existing = await self.export_rows(sheet_name)
-        last_row = max(
-            (index for index, row in enumerate(existing, start=1)
-             if any(str(value).strip() for value in row)),
-            default=1,
-        )
-        start_row = last_row + 1
-        name_box = await _visible(page.locator("#t-name-box"))
-        await name_box.fill(f"A{start_row}")
-        await name_box.press("Enter")
-        await page.wait_for_timeout(250)
-        tsv = "\n".join(
-            "\t".join(
-                str(value).replace("\t", " ").replace("\n", " ")
-                for value in row
-            )
-            for row in rows
-        )
-        await page.evaluate(
-            "text => navigator.clipboard.writeText(text)", tsv
-        )
-        await page.keyboard.press("Control+V" if os.name == "nt" else "Meta+V")
-        await page.wait_for_timeout(600)
-        exported = await self.export_rows(sheet_name)
         written_ids = {row[0] for row in rows}
-        visible_ids = {
-            row[0] for row in exported if row and row[0] in written_ids
-        }
-        if visible_ids != written_ids:
-            missing = ", ".join(sorted(written_ids - visible_ids))
-            raise RuntimeError(
-                f"Google Sheet chưa xác nhận đủ sự kiện lịch: {missing}"
+        last_missing = written_ids.copy()
+        name_box = await _visible(page.locator("#t-name-box"))
+
+        for attempt in range(1, 4):
+            existing = await self.export_rows(sheet_name)
+            visible_ids = {
+                row[0] for row in existing if row and row[0] in written_ids
+            }
+            last_missing = written_ids - visible_ids
+            if not last_missing:
+                return
+
+            missing_rows = [row for row in rows if row[0] in last_missing]
+            last_row = max(
+                (index for index, row in enumerate(existing, start=1)
+                 if any(str(value).strip() for value in row)),
+                default=1,
             )
+            start_row = last_row + 1
+            await name_box.fill(f"A{start_row}")
+            await name_box.press("Enter")
+            await page.wait_for_timeout(800)
+            if await name_box.input_value() != f"A{start_row}":
+                raise RuntimeError(
+                    f"Google Sheet không có hàng {start_row}; "
+                    "cần bổ sung thêm hàng"
+                )
+            tsv = "\n".join(
+                "\t".join(
+                    str(value).replace("\t", " ").replace("\n", " ")
+                    for value in row
+                )
+                for row in missing_rows
+            )
+            await page.evaluate(
+                "text => navigator.clipboard.writeText(text)", tsv
+            )
+            await page.keyboard.press(
+                "Control+V" if os.name == "nt" else "Meta+V"
+            )
+
+            deadline = (
+                asyncio.get_running_loop().time()
+                + self.session.config.timeout_ms / 1000
+            )
+            while asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(1)
+                exported = await self.export_rows(sheet_name)
+                visible_ids = {
+                    row[0] for row in exported if row and row[0] in written_ids
+                }
+                last_missing = written_ids - visible_ids
+                if not last_missing:
+                    return
+            if attempt < 3:
+                print(
+                    "Google Sheet chưa xác nhận đủ sự kiện lịch; "
+                    f"đang kiểm tra và ghi lại phần còn thiếu "
+                    f"({attempt + 1}/3)..."
+                )
+
+        missing = ", ".join(sorted(last_missing))
+        raise RuntimeError(
+            f"Google Sheet chưa xác nhận đủ sự kiện lịch sau 3 lần thử: {missing}"
+        )
 
     async def replace_assignee(
         self, record: Mapping[str, str], new_assignee: str

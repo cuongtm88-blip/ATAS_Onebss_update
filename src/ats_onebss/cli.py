@@ -8,9 +8,18 @@ import shutil
 from collections import Counter
 from dataclasses import replace
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from .attendance import (
+    is_working_day,
+    is_working_session,
+    load_calendar,
+    members_on_leave,
+    monthly_availability_ratios,
+    working_dates,
+)
 from .browser import BrowserSession, GoogleSheetClient, OneBSSClient
 from .config import Config, load_config
 from .credentials import load_credentials
@@ -435,7 +444,50 @@ async def command_login(config: Config) -> None:
         )
 
 
+def attendance_adjusted_config(config: Config) -> Config:
+    """Apply South leave exclusions and monthly workday targets to a run."""
+    if config.attendance_calendar_file is None:
+        return config
+    calendar = load_calendar(config.attendance_calendar_file)
+    now = datetime.now(ZoneInfo(config.timezone))
+    rules = load_rules(config.rules_file)
+    members = tuple(dict.fromkeys(
+        member.name for rule in rules for member in rule.members
+    ))
+    availability = monthly_availability_ratios(
+        calendar, members, now.year, now.month
+    )
+    targets = dict(config.member_target_ratios)
+    for name, ratio in availability.items():
+        targets[name] = targets.get(name, Decimal(1)) * ratio
+    current_leave = members_on_leave(calendar, now)
+    excluded = tuple(dict.fromkeys(
+        (*config.excluded_members, *current_leave)
+    ))
+    month_workdays = len(working_dates(now.year, now.month, calendar))
+    reduced = [
+        f"{name} {availability[name] * 100:.1f}%"
+        for name in members
+        if availability[name] < 1
+    ]
+    print(
+        f"Lịch công Miền Nam tháng {now.month}/{now.year}: "
+        f"{month_workdays} ngày làm việc; ca sáng 08:00–12:00, "
+        "ca chiều 13:00–17:00."
+    )
+    if reduced:
+        print("Mục tiêu điểm theo ngày công: " + ", ".join(reduced) + ".")
+    if current_leave:
+        print("Đang nghỉ theo lịch: " + ", ".join(current_leave) + ".")
+    return replace(
+        config,
+        member_target_ratios=targets,
+        excluded_members=excluded,
+    )
+
+
 async def command_plan(config: Config) -> None:
+    config = attendance_adjusted_config(config)
     ledger = Ledger(config.database)
     async with BrowserSession(config) as session:
         onebss = OneBSSClient(session)
@@ -557,6 +609,22 @@ async def process_available(
     balance_scores: dict,
 ) -> tuple[int, int]:
     """Process the current queue, using bounded read windows when configured."""
+    config = attendance_adjusted_config(config)
+    if config.attendance_calendar_file is not None:
+        calendar = load_calendar(config.attendance_calendar_file)
+        now = datetime.now(ZoneInfo(config.timezone))
+        if not is_working_day(now.date(), calendar):
+            print(
+                f"Hôm nay {now:%d/%m/%Y} là ngày nghỉ theo lịch Miền Nam; "
+                "không giao phiếu."
+            )
+            return 0, 0
+        if not is_working_session(now):
+            print(
+                f"Ngoài giờ làm việc Miền Nam ({now:%H:%M}); "
+                "không giao phiếu trong thời gian này."
+            )
+            return 0, 0
     completed = 0
     read_size = config.read_batch_size
     snapshot = (

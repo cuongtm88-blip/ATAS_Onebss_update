@@ -117,11 +117,11 @@ def load_config(path: str | Path) -> Config:
     project_rules_value = rules.get("projects_file", "project_rules.toml")
     read_batch_value = onebss.get("read_batch_size")
     is_south = "1vaHpBKhdWvWru8WIGigKEJDAcqngHLahEMxYIoBGi8w" in sheet.get("url", "")
-    if read_batch_value is None and is_south:
+    if is_south:
         # Existing Windows installs keep their Application Support config
-        # across updates, so apply the South default even when that file
-        # predates the new packaged setting.
-        read_batch_value = 50
+        # across updates, so enforce the current South batch size even when
+        # their copied config still contains the previous value.
+        read_batch_value = 20
     attendance = data.get("attendance", {})
     return Config(
         root=root,

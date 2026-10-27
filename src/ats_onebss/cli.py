@@ -20,6 +20,7 @@ from .attendance import (
     monthly_availability_ratios,
     working_dates,
 )
+from .calendar_sync import sync_calendar
 from .browser import BrowserSession, GoogleSheetClient, OneBSSClient
 from .config import Config, load_config
 from .credentials import load_credentials
@@ -486,6 +487,29 @@ def attendance_adjusted_config(config: Config) -> Config:
     )
 
 
+async def sync_attendance_calendar(config: Config, sheet: GoogleSheetClient) -> None:
+    if config.attendance_calendar_file is None:
+        return
+    sheet_name = config.attendance_sheet_name
+    rows = await sheet.export_rows(sheet_name)
+    if not rows or rows[0][:11] != [
+        "event_id", "operation", "record_type", "record_key", "date",
+        "status", "member", "start_date", "end_date", "session", "updated_at",
+    ]:
+        raise RuntimeError(
+            f"Tab Google Sheet '{sheet_name}' chưa có cấu trúc lịch ATS hợp lệ."
+        )
+    baseline = config.attendance_calendar_file.with_name(
+        config.attendance_calendar_file.stem + ".synced.json"
+    )
+    await sync_calendar(
+        config.attendance_calendar_file,
+        baseline,
+        rows[1:],
+        lambda events: sheet.append_calendar_events(events, sheet_name),
+    )
+
+
 async def command_plan(config: Config) -> None:
     config = attendance_adjusted_config(config)
     ledger = Ledger(config.database)
@@ -796,6 +820,7 @@ async def open_clients(
     onebss = OneBSSClient(session)
     sheet = GoogleSheetClient(session)
     await sheet.open()
+    await sync_attendance_calendar(config, sheet)
     await onebss.open()
     if not await onebss.session_is_logged_in():
         username, password = load_credentials(region_key)
@@ -926,6 +951,14 @@ async def command_sync(config: Config) -> None:
         if dashboard.enabled:
             await dashboard.heartbeat()
         print("Đã hoàn tất đồng bộ dữ liệu tồn đọng.")
+
+
+async def command_calendar_sync(config: Config) -> None:
+    async with BrowserSession(config) as session:
+        sheet = GoogleSheetClient(session)
+        await sheet.open()
+        await sync_attendance_calendar(config, sheet)
+        print("Đã đồng bộ lịch làm việc lên Google Sheet.")
 
 
 async def process_reassignment_command(
@@ -1095,6 +1128,7 @@ async def command_watch(config: Config) -> None:
             now = asyncio.get_running_loop().time()
             if now >= next_automatic_cycle:
               try:
+                await sync_attendance_calendar(config, sheet)
                 sheet_assignees, balance_scores = await load_sheet_source(
                     config, sheet, ledger
                 )
@@ -1231,6 +1265,10 @@ def parser() -> argparse.ArgumentParser:
         "sync", help="Chỉ đồng bộ dữ liệu đã giao sang Google Sheet/Dashboard"
     )
     sync.add_argument("--yes", action="store_true", help="Xác nhận ghi dữ liệu")
+    calendar_sync = sub.add_parser(
+        "calendar-sync", help="Đồng bộ lịch nghỉ và ngày làm việc"
+    )
+    calendar_sync.add_argument("--yes", action="store_true")
     return result
 
 
@@ -1297,6 +1335,10 @@ def main() -> None:
         if not args.yes:
             raise SystemExit("Đồng bộ dữ liệu yêu cầu thêm --yes.")
         asyncio.run(command_sync(config))
+    elif args.command == "calendar-sync":
+        if not args.yes:
+            raise SystemExit("Đồng bộ lịch yêu cầu thêm --yes.")
+        asyncio.run(command_calendar_sync(config))
 
 
 if __name__ == "__main__":

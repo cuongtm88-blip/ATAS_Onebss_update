@@ -17,6 +17,7 @@ use_backup_members = true
 
 [attendance]
 file = "attendance_calendar.json"
+sheet_name = "Lịch ATS"
 
 [google_sheet]
 url = "https://docs.google.com/spreadsheets/d/1vaHpBKhdWvWru8WIGigKEJDAcqngHLahEMxYIoBGi8w/edit?gid=1342897091#gid=1342897091"

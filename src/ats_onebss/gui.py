@@ -290,7 +290,7 @@ def worker_command(
     if poll_interval_minutes is not None:
         result.extend(["--poll-interval-minutes", str(poll_interval_minutes)])
     result.append(command)
-    if command in {"run", "watch", "once", "sync"}:
+    if command in {"run", "watch", "once", "sync", "calendar-sync"}:
         result.append("--yes")
     if command in {"plan", "run", "watch", "once"}:
         for name in excluded:
@@ -979,17 +979,21 @@ class ATSOneBSSWindow(QMainWindow):
         self._set_process_controls(False)
 
     def _edit_attendance_calendar(self) -> None:
-        if self.attendance_calendar_path is None:
+        region = self._selected_region()
+        if self.attendance_calendar_path is None or region is None:
             return
         try:
             dialog = AttendanceCalendarDialog(
-                self.attendance_calendar_path, self.member_names, self
+                self.attendance_calendar_path, self.member_names, region.name, self
             )
         except (OSError, ValueError) as error:
             QMessageBox.critical(self, "Không đọc được lịch", str(error))
             return
         if dialog.exec() == QDialog.Accepted:
-            self._append_log("Đã lưu lịch làm việc và nghỉ nhân sự Miền Nam.")
+            self._append_log(
+                f"Đã lưu lịch làm việc {region.name}; đang đồng bộ lên Google Sheet..."
+            )
+            QTimer.singleShot(100, lambda: self._start("calendar-sync"))
 
     def _selected_exclusions(self) -> tuple[str, ...]:
         return tuple(item.text() for item in self.member_list.selectedItems())

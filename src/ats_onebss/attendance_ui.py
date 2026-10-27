@@ -27,12 +27,14 @@ from .attendance import load_calendar, save_calendar, validate_calendar
 
 class AttendanceCalendarDialog(QDialog):
     def __init__(
-        self, path: str | Path, member_names: tuple[str, ...], parent=None
+        self, path: str | Path, member_names: tuple[str, ...],
+        region_name: str = "", parent=None,
     ) -> None:
         super().__init__(parent)
         self.path = Path(path)
         self.data = deepcopy(load_calendar(self.path))
-        self.setWindowTitle("Lịch làm việc và nghỉ nhân sự — Miền Nam")
+        title = "Lịch làm việc và nghỉ nhân sự"
+        self.setWindowTitle(f"{title} — {region_name}" if region_name else title)
         self.resize(850, 610)
         layout = QVBoxLayout(self)
         tabs = QTabWidget()

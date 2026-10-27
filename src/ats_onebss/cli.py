@@ -511,12 +511,13 @@ async def sync_attendance_calendar(config: Config, sheet: GoogleSheetClient) -> 
 
 
 async def command_plan(config: Config) -> None:
-    config = attendance_adjusted_config(config)
     ledger = Ledger(config.database)
     async with BrowserSession(config) as session:
         onebss = OneBSSClient(session)
         sheet = GoogleSheetClient(session)
         await sheet.open()
+        await sync_attendance_calendar(config, sheet)
+        config = attendance_adjusted_config(config)
         await onebss.open()
         await onebss.wait_until_logged_in()
         sheet_assignees, balance_scores = await load_sheet_source(

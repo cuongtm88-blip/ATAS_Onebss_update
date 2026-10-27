@@ -15,6 +15,7 @@ use_backup_members = true
 
 [attendance]
 file = "attendance_calendar.json"
+sheet_name = "Lịch ATS"
 
 [balance.member_target_ratios]
 # Hệ số tải tối đa mong muốn so với thành viên thông thường trong cùng nhóm.

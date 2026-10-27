@@ -2482,6 +2482,50 @@ class GoogleSheetClient:
             raise RuntimeError(f"Không đọc được Google Sheet (HTTP {response.status})")
         return list(csv.reader(io.StringIO(await response.text())))
 
+    async def append_calendar_events(
+        self, rows: list[list[str]], sheet_name: str,
+    ) -> None:
+        """Append calendar change events to the dedicated regional tab."""
+        if not rows:
+            return
+        if any(len(row) != 11 for row in rows):
+            raise RuntimeError("Dòng đồng bộ lịch phải có đúng 11 cột.")
+        page = self.page or await self.open()
+        await self.activate_sheet(sheet_name)
+        existing = await self.export_rows(sheet_name)
+        last_row = max(
+            (index for index, row in enumerate(existing, start=1)
+             if any(str(value).strip() for value in row)),
+            default=1,
+        )
+        start_row = last_row + 1
+        name_box = await _visible(page.locator("#t-name-box"))
+        await name_box.fill(f"A{start_row}")
+        await name_box.press("Enter")
+        await page.wait_for_timeout(250)
+        tsv = "\n".join(
+            "\t".join(
+                str(value).replace("\t", " ").replace("\n", " ")
+                for value in row
+            )
+            for row in rows
+        )
+        await page.evaluate(
+            "text => navigator.clipboard.writeText(text)", tsv
+        )
+        await page.keyboard.press("Control+V" if os.name == "nt" else "Meta+V")
+        await page.wait_for_timeout(600)
+        exported = await self.export_rows(sheet_name)
+        written_ids = {row[0] for row in rows}
+        visible_ids = {
+            row[0] for row in exported if row and row[0] in written_ids
+        }
+        if visible_ids != written_ids:
+            missing = ", ".join(sorted(written_ids - visible_ids))
+            raise RuntimeError(
+                f"Google Sheet chưa xác nhận đủ sự kiện lịch: {missing}"
+            )
+
     async def replace_assignee(
         self, record: Mapping[str, str], new_assignee: str
     ) -> None:

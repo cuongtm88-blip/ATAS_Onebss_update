@@ -19,6 +19,7 @@ class Config:
     task: str
     batch_size: int
     attendance_calendar_file: Path | None
+    attendance_sheet_name: str
     timeout_ms: int
     rules_file: Path
     project_rules_file: Path | None
@@ -112,6 +113,7 @@ def load_config(path: str | Path) -> Config:
         attendance_calendar_file=resolve(
             str(attendance.get("file", "attendance_calendar.json"))
         ),
+        attendance_sheet_name=str(attendance.get("sheet_name", "Lịch ATS")),
         timeout_ms=int(onebss.get("timeout_ms", 30_000)),
         rules_file=resolve(rules["file"]),
         project_rules_file=(

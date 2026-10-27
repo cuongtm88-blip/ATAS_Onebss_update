@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   build-macos:
+    if: github.ref_name != 'v0.9.65'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -27,8 +28,27 @@ jobs:
           name: macos-arm64
           path: dist/ATS-OneBSS-macOS-arm64-*.zip
 
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build app
+        shell: pwsh
+        run: ./scripts/build_app.ps1
+      - name: Package app
+        shell: pwsh
+        run: |
+          $version = uv run python -c "from ats_onebss import __version__; print(__version__)"
+          Compress-Archive -Path "dist/ATS-OneBSS" -DestinationPath "dist/ATS-OneBSS-Windows-x64-$version.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/ATS-OneBSS-Windows-x64-*.zip
+
   publish-release:
-    needs: [build-macos]
+    if: always() && needs.build-windows.result == 'success' && (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped')
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -41,4 +61,4 @@ jobs:
           body: |
             - Bản tiêu chuẩn dành riêng cho Miền Bắc, phát triển từ mã nguồn ATS OneBSS 0.9.41.
             - Chỉ đóng gói cấu hình, quy tắc và workbook Miền Bắc.
-            - Gói ứng dụng macOS Apple Silicon.
+            - Gói ứng dụng cho Windows x64 và macOS Apple Silicon nếu có thay đổi macOS.

@@ -1,4 +1,4 @@
-name: Release ATS OneBSS Miền Bắc for macOS
+name: Release ATS OneBSS Miền Bắc for macOS and Windows
 
 on:
   push:
@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   build-macos:
-    if: github.ref_name != 'v0.9.65'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -61,4 +60,4 @@ jobs:
           body: |
             - Bản tiêu chuẩn dành riêng cho Miền Bắc, phát triển từ mã nguồn ATS OneBSS 0.9.41.
             - Chỉ đóng gói cấu hình, quy tắc và workbook Miền Bắc.
-            - Gói ứng dụng cho Windows x64 và macOS Apple Silicon nếu có thay đổi macOS.
+            - Gói ứng dụng cho Windows x64 và macOS Apple Silicon.

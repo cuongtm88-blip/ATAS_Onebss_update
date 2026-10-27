@@ -629,7 +629,9 @@ async def process_available(
     balance_scores: dict,
 ) -> tuple[int, int]:
     """Process the current queue until no eligible, unprocessed ticket remains."""
+    base_excluded = config.excluded_members
     config = attendance_adjusted_config(config)
+    cycle_config = config
     if config.attendance_calendar_file is not None:
         calendar = load_calendar(config.attendance_calendar_file)
         now = datetime.now(ZoneInfo(config.timezone))
@@ -641,6 +643,20 @@ async def process_available(
             return 0, 0
     completed = 0
     while True:
+        if config.attendance_calendar_file is not None:
+            calendar = load_calendar(config.attendance_calendar_file)
+            now = datetime.now(ZoneInfo(config.timezone))
+            if not is_working_day(now.date(), calendar):
+                print(f"Hôm nay {now:%d/%m/%Y} là ngày nghỉ theo lịch Miền Bắc; không giao phiếu.")
+                return completed, 0
+            if not is_working_session(now):
+                print(f"Ngoài giờ làm việc Miền Bắc ({now:%H:%M}); không giao phiếu.")
+                return completed, 0
+            current_leave = members_on_leave(calendar, now)
+            config = replace(
+                cycle_config,
+                excluded_members=tuple(dict.fromkeys((*base_excluded, *current_leave))),
+            )
         assignments, skipped, visible_counts = await collect_plan(
             config, onebss, ledger, refresh=False, completed_keys=processed,
             sheet_assignees=sheet_assignees,
@@ -649,6 +665,20 @@ async def process_available(
         # Permit a new occurrence only after the ticket disappeared from a
         # refreshed snapshot. A still-visible row is not assigned repeatedly.
         processed.intersection_update(visible_counts)
+        if config.attendance_calendar_file is not None:
+            calendar = load_calendar(config.attendance_calendar_file)
+            now = datetime.now(ZoneInfo(config.timezone))
+            if not is_working_day(now.date(), calendar) or not is_working_session(now):
+                print(
+                    f"Đã đến ngoài giờ làm việc ({now:%H:%M}); "
+                    "dừng trước khi giao lô tiếp theo."
+                )
+                return completed, len(skipped)
+            current_leave = members_on_leave(calendar, now)
+            live_excluded = tuple(dict.fromkeys((*base_excluded, *current_leave)))
+            if set(live_excluded) != set(config.excluded_members):
+                config = replace(cycle_config, excluded_members=live_excluded)
+                continue
         write_preview(config.preview_csv, assignments)
         write_skipped(config.preview_csv.with_name("preview_skipped.csv"), skipped)
         if not assignments:

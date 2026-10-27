@@ -19,3 +19,4 @@ def test_legacy_runtime_config_adds_reassignment_column_without_replacing_settin
 
     assert config.sheet_columns[-2:] == ("project_name", "reassignment")
     assert config.sheet_name == "Tháng 8/2026"
+    assert config.attendance_calendar_file == tmp_path / "attendance_calendar.json"

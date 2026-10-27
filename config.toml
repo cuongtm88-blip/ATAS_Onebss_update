@@ -13,6 +13,9 @@ projects_file = "project_rules.toml"
 # Chính và Phụ đều là nhân sự hợp lệ; không áp dụng quota theo vai trò.
 use_backup_members = true
 
+[attendance]
+file = "attendance_calendar.json"
+
 [balance.member_target_ratios]
 # Hệ số tải tối đa mong muốn so với thành viên thông thường trong cùng nhóm.
 "Lương Tuấn Thanh" = 1.10

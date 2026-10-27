@@ -22,6 +22,7 @@ uv run pyinstaller `
   --add-data "regions.toml;." `
   --add-data "config.toml;." `
   --add-data "project_rules.toml;." `
+  --add-data "attendance_calendar.json;." `
   --add-data "$($ruleWorkbook.FullName);." `
   --add-data "assets/vinaphone-logo.png;assets" `
   src/ats_onebss/gui_main.py

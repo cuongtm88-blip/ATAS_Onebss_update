@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -64,6 +65,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__
+from .attendance_ui import AttendanceCalendarDialog
 from .config import load_config
 from .credentials import (
     CredentialStoreError,
@@ -102,6 +104,7 @@ RESOURCE_FILES = (
     "config.toml",
     "project_rules.toml",
     "Giao phiếu_demo2.xlsx",
+    "attendance_calendar.json",
 )
 
 
@@ -436,6 +439,7 @@ class ATSOneBSSWindow(QMainWindow):
         self.skipped_csv_path: Path | None = None
         self.skipped_csv_stamp: tuple[int, int] | None = None
         self.database_path: Path | None = None
+        self.attendance_calendar_path: Path | None = None
         self.telegram_signals = TelegramSignals(self)
         self.update_signals = UpdateSignals(self)
         self._update_busy = False
@@ -630,6 +634,9 @@ class ATSOneBSSWindow(QMainWindow):
         self.member_list = QListWidget()
         self.member_list.setSelectionMode(QListWidget.MultiSelection)
         staff_layout.addWidget(self.member_list, 1)
+        self.attendance_calendar_button = QPushButton("Lịch nghỉ & ngày làm việc")
+        self.attendance_calendar_button.clicked.connect(self._edit_attendance_calendar)
+        staff_layout.addWidget(self.attendance_calendar_button)
         splitter.addWidget(staff_card)
 
         detail_card = Card()
@@ -940,6 +947,8 @@ class ATSOneBSSWindow(QMainWindow):
         self.skipped_csv_path = None
         self.skipped_csv_stamp = None
         self.database_path = None
+        self.attendance_calendar_path = None
+        self.attendance_calendar_button.setVisible(False)
         default_interval = 15
         if region.enabled:
             try:
@@ -947,6 +956,10 @@ class ATSOneBSSWindow(QMainWindow):
                 config = load_config(region.config_path)
                 default_interval = config.poll_interval_minutes
                 self.database_path = config.database
+                self.attendance_calendar_path = config.attendance_calendar_file
+                self.attendance_calendar_button.setVisible(
+                    self.attendance_calendar_path is not None
+                )
                 self.skipped_csv_path = config.preview_csv.with_name(
                     "preview_skipped.csv"
                 )
@@ -979,6 +992,20 @@ class ATSOneBSSWindow(QMainWindow):
         self.skipped_assignee_combo.addItems(self.member_names)
         self.settings["last_region"] = region.key
         self._set_process_controls(False)
+
+    def _edit_attendance_calendar(self) -> None:
+        region = self._selected_region()
+        if self.attendance_calendar_path is None or region is None:
+            return
+        try:
+            dialog = AttendanceCalendarDialog(
+                self.attendance_calendar_path, self.member_names, region.name, self
+            )
+        except (OSError, ValueError) as error:
+            QMessageBox.critical(self, "Không đọc được lịch", str(error))
+            return
+        if dialog.exec() == QDialog.Accepted:
+            self._append_log(f"Đã lưu lịch làm việc và nghỉ nhân sự {region.name}.")
 
     def _selected_exclusions(self) -> tuple[str, ...]:
         return tuple(item.text() for item in self.member_list.selectedItems())
@@ -1897,6 +1924,9 @@ class ATSOneBSSWindow(QMainWindow):
         )
         self.region_combo.setEnabled(idle)
         self.member_list.setEnabled(idle)
+        self.attendance_calendar_button.setEnabled(
+            enabled_region and idle and self.attendance_calendar_path is not None
+        )
         self.cycle_minutes.setEnabled(enabled_region and idle)
         self.update_rules_button.setEnabled(enabled_region and idle)
         self.update_version_button.setEnabled(

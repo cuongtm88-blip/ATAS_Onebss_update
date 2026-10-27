@@ -308,8 +308,9 @@ def test_demo2_percentage_workbook_expands_service_map_and_preserves_api_flags()
     sip = match_rule(rules, Ticket("GD1", "TB1", "ISDN 30B+D cáp đồng"))
     assert sip.sheet_service == "SIP"
     assert {member.name: member.target_share for member in sip.members} == {
-        "Nguyễn Hoàng Dương": Decimal("0.3"),
-        "Lê Đức Tuấn": Decimal("0.7"),
+        "Nguyễn Hoàng Dương": Decimal("0.33"),
+        "Trần Thị Thu Hằng": Decimal("0.34"),
+        "Lê Đức Tuấn": Decimal("0.33"),
     }
     fiber = match_rule(rules, Ticket("GD2", "TB2", "Mega"))
     assert fiber.sheet_service == "Fiber"
@@ -375,7 +376,8 @@ def test_demo2_percentage_rows_sum_to_100_and_keep_fixed_group_roster():
 
     assert len(group_members["Nhóm 1"]) == 14
     assert len(group_members["Nhóm 2"]) == 4
-    assert len(names) == 17  # Trần Mạnh Cường is a non-scoring dispatcher.
+    # Lê Đức Tuấn is two separate scoring seats, one in each group.
+    assert len(names) == 18
 
 
 def test_canonical_member_name_accepts_unique_vietnamese_tone_typo():

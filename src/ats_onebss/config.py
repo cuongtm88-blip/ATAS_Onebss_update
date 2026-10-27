@@ -18,6 +18,7 @@ class Config:
     browser_channel: str
     task: str
     batch_size: int
+    attendance_calendar_file: Path | None
     timeout_ms: int
     rules_file: Path
     project_rules_file: Path | None
@@ -99,6 +100,7 @@ def load_config(path: str | Path) -> Config:
             return candidate.resolve()
         return match.resolve()
     project_rules_value = rules.get("projects_file", "project_rules.toml")
+    attendance = data.get("attendance", {})
     return Config(
         root=root,
         onebss_url=onebss["url"],
@@ -107,6 +109,9 @@ def load_config(path: str | Path) -> Config:
         browser_channel=onebss.get("browser_channel", "chrome"),
         task=onebss.get("task", "Kiểm tra và xử lý"),
         batch_size=int(onebss.get("batch_size", 20)),
+        attendance_calendar_file=resolve(
+            str(attendance.get("file", "attendance_calendar.json"))
+        ),
         timeout_ms=int(onebss.get("timeout_ms", 30_000)),
         rules_file=resolve(rules["file"]),
         project_rules_file=(

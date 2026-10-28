@@ -393,7 +393,10 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
             str(map_sheet.cell(row, map_condition_column).value or "").strip()
             if map_condition_column else ""
         )
-        if base_condition and map_condition and unaccent(base_condition) != unaccent(map_condition):
+        if (
+            base_condition and map_condition
+            and not _condition_is_subset(map_condition, base_condition)
+        ):
             raise RuleError(
                 f"Quy tắc group không khớp tại sheet Group DV, dòng {row}"
             )
@@ -416,6 +419,25 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
     if not rules:
         raise RuleError("Sheet Group DV không có dòng ánh xạ dịch vụ hợp lệ")
     return rules
+
+
+def _condition_is_subset(specific: str, general: str) -> bool:
+    """Allow a service-map condition when its alternatives are covered by its group rule."""
+    if unaccent(specific) == unaccent(general):
+        return True
+    specific_kind, separator, specific_values = specific.partition(":")
+    general_kind, general_separator, general_values = general.partition(":")
+    if not separator or not general_separator:
+        return False
+    if unaccent(specific_kind.strip()) != unaccent(general_kind.strip()):
+        return False
+    specific_options = {
+        unaccent(option.strip()) for option in specific_values.split(",") if option.strip()
+    }
+    general_options = {
+        unaccent(option.strip()) for option in general_values.split(",") if option.strip()
+    }
+    return bool(specific_options) and specific_options.issubset(general_options)
 
 
 def load_rules(path: str | Path) -> list[ServiceRule]:

@@ -58,10 +58,19 @@ def test_group_dv_rules_retain_service_group_for_project_matching(tmp_path):
     rules_sheet.title = "Phân bổ"
     rules_sheet.append([None, None, None, None, "Nhóm 1"])
     rules_sheet.append(["STT", "Group DV", "Điểm quy đổi", "Quy tắc", "An"])
-    rules_sheet.append([1, "Mega LT", 20, "", "100%"])
+    rules_sheet.append([
+        1, "Mega LT", 20,
+        "Kiểu lắp đặt: Thay đổi thông tin, Gia hạn dịch vụ", "100%",
+    ])
     mapping = workbook.create_sheet("Group DV")
-    mapping.append(["Dịch vụ", "Dịch vụ trên Google Sheet", "Điểm quy đổi", "Group DV"])
-    mapping.append(["MetroNet LT", "Megawan LT", 20, "Mega LT"])
+    mapping.append([
+        "Dịch vụ", "Dịch vụ trên Google Sheet", "Điểm quy đổi",
+        "Quy tắc group", "Group DV",
+    ])
+    mapping.append([
+        "MetroNet LT", "Megawan LT", 20,
+        "Kiểu lắp đặt: Thay đổi thông tin", "Mega LT",
+    ])
     path = tmp_path / "rules-group-dv.xlsx"
     workbook.save(path)
 

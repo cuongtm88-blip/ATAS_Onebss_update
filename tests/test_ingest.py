@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+import ats_onebss.ingest as ingest
 from ats_onebss.ingest import INGEST_API_TOKEN_ENV, IngestApiClient
 from ats_onebss.ledger import Ledger
 from ats_onebss.models import Assignment, Ticket
@@ -19,11 +20,12 @@ def test_ingest_api_payload_uses_exact_field_names_without_status(monkeypatch):
         def read(self):
             return b'{"ok":true,"invalid":[]}'
 
-    def fake_urlopen(request, timeout):
+    def fake_urlopen(request, timeout, **kwargs):
         request_data["url"] = request.full_url
         request_data["headers"] = dict(request.header_items())
         request_data["body"] = request.data
         request_data["timeout"] = timeout
+        request_data["context"] = kwargs.get("context")
         return Response()
 
     monkeypatch.setattr("ats_onebss.ingest.urlopen", fake_urlopen)
@@ -45,6 +47,8 @@ def test_ingest_api_payload_uses_exact_field_names_without_status(monkeypatch):
     assert result == {"ok": True, "invalid": []}
     assert request_data["url"] == "https://one-dieuhanh.fly.dev/api/ingest/tickets"
     assert request_data["headers"]["X-ingest-token"] == "secret-token"
+    if ingest.sys.platform == "darwin":
+        assert request_data["context"] is not None
     assert json.loads(request_data["body"].decode("utf-8")) == {
         "tickets": [{
             "Ngày giao": "29/09/2026 08:34",
@@ -59,6 +63,22 @@ def test_ingest_api_payload_uses_exact_field_names_without_status(monkeypatch):
             "Địa chỉ lắp đặt": "Số 1 Trần Phú, Hà Nội",
         }]
     }
+
+
+def test_ingest_transport_preserves_certificate_validation_on_macos(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout, **kwargs):
+        captured["context"] = kwargs.get("context")
+        return object()
+
+    monkeypatch.setattr(ingest.sys, "platform", "darwin")
+    monkeypatch.setattr(ingest, "urlopen", fake_urlopen)
+
+    ingest._verified_urlopen("https://one-dieuhanh.fly.dev", timeout=25)
+
+    assert captured["context"] is not None
+    assert captured["context"].verify_mode == ingest.ssl.CERT_REQUIRED
 
 
 def test_ingest_outbox_only_contains_confirmed_new_assignments(tmp_path):

@@ -2272,11 +2272,17 @@ class GoogleSheetClient:
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, Decimal]]:
         """Load historical routing, current-month identities, and monthly scores."""
         page = self.page or await self.open()
-        tab_names = [
-            text.strip()
-            for text in await page.locator(".docs-sheet-tab-name").all_inner_texts()
-            if text.strip()
-        ]
+        # Google Sheets can keep names for hidden or stale tabs in the DOM.
+        # Only tabs a user can currently activate are valid export targets.
+        tab_locator = page.locator(".docs-sheet-tab-name")
+        tab_names: list[str] = []
+        for index in range(await tab_locator.count()):
+            tab = tab_locator.nth(index)
+            if not await tab.is_visible():
+                continue
+            name = (await tab.inner_text()).strip()
+            if name and name not in tab_names:
+                tab_names.append(name)
         monthly_names = [
             name for name in tab_names
             if re.fullmatch(r"tháng\s+\d{1,2}/\d{4}", normalize(name))

@@ -148,6 +148,49 @@ def test_sheet_month_scores_reads_authoritative_totals():
     }
 
 
+def test_assignment_source_ignores_hidden_stale_month_tab():
+    class Tab:
+        def __init__(self, name, visible=True):
+            self.name = name
+            self.visible = visible
+
+        async def is_visible(self):
+            return self.visible
+
+        async def inner_text(self):
+            return self.name
+
+    class Tabs:
+        def __init__(self, tabs):
+            self.tabs = tabs
+
+        async def count(self):
+            return len(self.tabs)
+
+        def nth(self, index):
+            return self.tabs[index]
+
+    config = SimpleNamespace(
+        sheet_name="Tháng 10/2026",
+        sheet_name_template="Tháng {month}/{year}",
+        timezone="Asia/Ho_Chi_Minh",
+    )
+    client = GoogleSheetClient(SimpleNamespace(config=config))
+    page = SimpleNamespace(locator=Mock(return_value=Tabs([
+        Tab("Tháng 1/2026", visible=False),
+        Tab("Tháng 9/2026"),
+        Tab("Tháng 10/2026"),
+    ])))
+    client.page = page
+    client.export_rows = AsyncMock(return_value=[])
+
+    asyncio.run(client.assignment_source())
+
+    assert [call.args[0] for call in client.export_rows.await_args_list] == [
+        "Tháng 9/2026", "Tháng 10/2026"
+    ]
+
+
 def test_sheet_month_scores_handles_blank_merged_labels_from_gviz():
     rows = [
         ["", "An", ""],

@@ -16,10 +16,11 @@ class FakeResponse:
 def test_send_message_posts_encoded_chat_and_text(monkeypatch):
     captured = {}
 
-    def fake_urlopen(request, timeout):
+    def fake_urlopen(request, timeout, **kwargs):
         captured["url"] = request.full_url
         captured["body"] = request.data.decode("utf-8")
         captured["timeout"] = timeout
+        captured["context"] = kwargs.get("context")
         return FakeResponse()
 
     monkeypatch.setattr(telegram, "urlopen", fake_urlopen)
@@ -30,6 +31,8 @@ def test_send_message_posts_encoded_chat_and_text(monkeypatch):
     assert "chat_id=-100123" in captured["body"]
     assert "L%E1%BB%97i+%C4%91%C4%83ng+nh%E1%BA%ADp" in captured["body"]
     assert captured["timeout"] == 12
+    if telegram.sys.platform == "darwin":
+        assert captured["context"] is not None
 
 
 def test_resume_command_requires_configured_private_chat():

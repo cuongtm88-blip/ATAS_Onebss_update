@@ -52,6 +52,25 @@ def test_loads_separate_google_sheet_service_and_shifted_members(tmp_path):
     assert rule.members[0].name == "An"
 
 
+def test_group_dv_rules_retain_service_group_for_project_matching(tmp_path):
+    workbook = Workbook()
+    rules_sheet = workbook.active
+    rules_sheet.title = "Phân bổ"
+    rules_sheet.append([None, None, None, None, "Nhóm 1"])
+    rules_sheet.append(["STT", "Group DV", "Điểm quy đổi", "Quy tắc", "An"])
+    rules_sheet.append([1, "Mega LT", 20, "", "100%"])
+    mapping = workbook.create_sheet("Group DV")
+    mapping.append(["Dịch vụ", "Dịch vụ trên Google Sheet", "Điểm quy đổi", "Group DV"])
+    mapping.append(["MetroNet LT", "Megawan LT", 20, "Mega LT"])
+    path = tmp_path / "rules-group-dv.xlsx"
+    workbook.save(path)
+
+    rule = load_rules(path)[0]
+
+    assert rule.service == "MetroNet LT"
+    assert rule.service_group == "Mega LT"
+
+
 def test_api_column_is_opt_in_and_not_treated_as_a_member(tmp_path):
     workbook = Workbook()
     sheet = workbook.active
@@ -373,7 +392,7 @@ fixed_assignee = "Nguyễn Hoàng Dương"
     ticket = Ticket(
         "GD1", "TB1", "Fiber", subscriber_name="Dịch vụ của ĐÀI THVN tại Hà Nội"
     )
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
     assert match is not None
     assert match.project_name == "Đài THVN"
     assert match.assignee == "Nguyễn Hoàng Dương"
@@ -386,7 +405,7 @@ def test_hanoi_radio_television_customer_is_assigned_to_nguyen_hoang_duong():
         customer_name="ĐÀI PHÁT THANH - TRUYỀN HÌNH HÀ NỘI",
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.project_name == "Đài Phát Thanh - Truyền Hình Hà Nội"
@@ -453,7 +472,7 @@ def test_bhxh_project_uses_bca_routing(address, assignee):
         labor_address=address,
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.project_name == "Dự án BHXH"
@@ -487,7 +506,7 @@ def test_mobifone_no_longer_uses_project_routing():
         ),
         labor_address="Tòa nhà Mobifone, Thành phố Hà Nội",
     )
-    assert match_project_rule(rules, ticket) is None
+    assert match_project_rule(rules, ticket, "Fiber") is None
 
 
 @pytest.mark.parametrize(
@@ -508,7 +527,7 @@ def test_bdtw_project_uses_bca_routing(address, assignee):
         customer_name="Trung tâm dịch vụ thuộc CỤC BĐTW",
         labor_address=address,
     )
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
     assert match is not None
     assert match.project_name == "Dự án Cục BĐTW"
     assert match.assignee == assignee
@@ -532,7 +551,7 @@ def test_btc_project_uses_bca_routing(address, assignee):
         customer_name="Đơn vị trực thuộc TỔNG CỤC DỰ TRỮ NHÀ NƯỚC",
         labor_address=address,
     )
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
     assert match is not None
     assert match.project_name == "Dự án BTC"
     assert match.assignee == assignee
@@ -548,7 +567,7 @@ def test_btc_project_accepts_tong_cuc_thue_customer_alias():
         connection_address="Cục Thuế TP. Hải Phòng, Tỉnh Hải Phòng",
         labor_province="Thành phố Hà Nội",
     )
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
     assert match is not None
     assert match.project_name == "Dự án BTC"
     assert match.assignee == "Đào Anh Vũ"
@@ -564,7 +583,7 @@ def test_btc_tong_cuc_thue_in_subscriber_name_routes_by_labor_province():
         labor_province="Tỉnh Thanh Hóa",
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.project_name == "Dự án BTC"
@@ -579,10 +598,44 @@ def test_btc_project_accepts_customs_it_statistics_customer_alias():
         customer_name="Cục Công Nghệ Thông Tin & Thống Kê Hải Quan",
         labor_address="Điểm lắp đặt tại tỉnh Thanh Hóa",
     )
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
     assert match is not None
     assert match.project_name == "Dự án BTC"
     assert match.assignee == "Nguyễn Duy Thành"
+
+
+def test_btc_project_accepts_finance_it_statistics_customer_alias():
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    ticket = Ticket(
+        "GD-FINANCE-IT", "TB-FINANCE-IT", "Fiber",
+        customer_name="Cục Tin Học Và Thống Kê Tài Chính",
+        labor_address="Điểm lắp đặt tại thành phố Hà Nội",
+    )
+    match = match_project_rule(rules, ticket, "Fiber")
+    assert match is not None
+    assert match.project_name == "Dự án BTC"
+    assert match.assignee == "Đào Anh Vũ"
+
+
+def test_project_group_allowlist_and_vietlott_exception():
+    project_file = Path(__file__).parents[1] / "project_rules.toml"
+    rules = load_project_rules(project_file)
+    bca_ticket = Ticket(
+        "GD-BCA-GROUP", "TB-BCA-GROUP", "Fiber",
+        customer_name="Cục Viễn Thông & Cơ Yếu BCA",
+        labor_address="Thành phố Hà Nội",
+    )
+    assert match_project_rule(rules, bca_ticket, "Fiber").project_name == "Dự án BCA"
+    assert match_project_rule(rules, bca_ticket, "SIP") is None
+    assert match_project_rule(rules, bca_ticket) is None
+
+    vietlott_ticket = Ticket(
+        "GD-VIETLOTT-GROUP", "TB-VIETLOTT-GROUP", "SIP",
+        customer_name="Công Ty Cổ Phần Đầu Tư Kỹ Thuật Berjaya Gia Thịnh",
+        labor_address="Thành phố Hà Nội",
+    )
+    assert match_project_rule(rules, vietlott_ticket, "SIP").project_name == "Dự án Vietlott"
 
 
 def test_vietlott_project_routes_tuyen_quang_by_subscriber_prefix(tmp_path):
@@ -642,7 +695,7 @@ def test_vietlott_reassigned_routes(address, assignee):
         labor_address=address,
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.project_name == "Dự án Vietlott"
@@ -670,7 +723,7 @@ def test_project_falls_back_to_labor_province():
         connection_address="Địa chỉ kết nối tại Thành phố Hà Nội",
         labor_province="Tp Hải Phòng",
     )
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
     assert match is not None
     assert match.project_name == "Dự án BTC"
     assert match.assignee == "Vũ Thế Ninh"
@@ -685,7 +738,7 @@ def test_kho_bac_nha_nuoc_uses_btc_project_routes():
         labor_address="Trụ sở Kho Bạc Nhà Nước, Thành phố Hải Phòng",
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.project_name == "Dự án BTC"
@@ -700,7 +753,7 @@ def test_hnth_customer_rule_requires_matching_note():
         notes="Lắp đặt Kênh phục vụ HNTH theo yêu cầu",
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.project_name == "Cục Quản Trị NHNN - Kênh phục vụ HNTH"
@@ -723,7 +776,7 @@ def test_project_understands_tp_bg_as_bac_giang():
         customer_name="Tổng Cục Dự Trữ Nhà Nước",
         labor_address="303 Lê Lợi TP BG (Nội Tỉnh)",
     )
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
     assert match is not None
     assert match.project_name == "Dự án BTC"
     assert match.assignee == "Đào Anh Vũ"
@@ -742,7 +795,7 @@ def test_tong_cuc_thue_falls_back_to_labor_province():
         labor_province="Tỉnh Nghệ An",
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.project_name == "Dự án BTC"
@@ -760,7 +813,7 @@ def test_project_prefers_labor_address_over_labor_province():
         labor_province="Tỉnh Nghệ An",
     )
 
-    match = match_project_rule(rules, ticket)
+    match = match_project_rule(rules, ticket, "Fiber")
 
     assert match is not None
     assert match.assignee == "Vũ Thế Ninh"
@@ -777,4 +830,4 @@ def test_project_does_not_use_connection_address_as_fallback():
     )
 
     with pytest.raises(RuleError, match="labor_province"):
-        match_project_rule(rules, ticket)
+        match_project_rule(rules, ticket, "Fiber")

@@ -1,3 +1,3 @@
 """ATS OneBSS automation."""
 
-__version__ = "0.9.67"
+__version__ = "0.9.68"

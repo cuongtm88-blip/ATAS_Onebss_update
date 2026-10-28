@@ -188,6 +188,9 @@ def test_watch_retries_failed_cycle_without_normal_interval(tmp_path, monkeypatc
     async def fake_load_sheet_source(*_args):
         return {}, {}
 
+    async def fake_sync(*_args):
+        return None
+
     async def fake_sleep(seconds):
         delays.append(seconds)
 
@@ -195,6 +198,8 @@ def test_watch_retries_failed_cycle_without_normal_interval(tmp_path, monkeypatc
     monkeypatch.setattr(cli, "open_clients", fake_open_clients)
     monkeypatch.setattr(cli, "load_sheet_source", fake_load_sheet_source)
     monkeypatch.setattr(cli, "process_available", fake_process_available)
+    monkeypatch.setattr(cli, "sync_attendance_calendar", fake_sync)
+    monkeypatch.setattr(cli, "sync_pending", fake_sync)
     monkeypatch.setattr(cli.asyncio, "sleep", fake_sleep)
 
     with pytest.raises(asyncio.CancelledError):

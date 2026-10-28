@@ -93,6 +93,10 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
             str(value).strip() for value in item.get("fixed_assignees", [])
             if str(value).strip()
         )
+        service_groups = tuple(
+            str(value).strip() for value in item.get("service_groups", [])
+            if str(value).strip()
+        )
         points_multiplier = Decimal(str(item.get("points_multiplier", 1)))
         if points_multiplier <= 0:
             raise RuleError(f"Quy tắc {name} phải có points_multiplier lớn hơn 0")
@@ -117,6 +121,7 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
                 required_contains=required_contains,
                 points_multiplier=points_multiplier,
                 fixed_assignees=fixed_assignees,
+                service_groups=service_groups,
             )
             for contains in contains_values
         )
@@ -124,10 +129,16 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
 
 
 def match_project_rule(
-    project_rules: list[ProjectRule], ticket: Ticket
+    project_rules: list[ProjectRule], ticket: Ticket, service_group: str = ""
 ) -> ProjectMatch | None:
     """Return a named project override, or fail safely for an unknown project area."""
     for rule in project_rules:
+        if rule.service_groups:
+            if not service_group:
+                continue
+            allowed = {unaccent(value) for value in rule.service_groups}
+            if unaccent(service_group) not in allowed:
+                continue
         values = [unaccent(getattr(ticket, field, "")) for field in rule.match_fields]
         if not any(unaccent(rule.contains) in value for value in values):
             continue
@@ -400,7 +411,7 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
         signatures.add(signature)
         rules.append(ServiceRule(
             base_row, service, points, condition, members, sheet_service,
-            count_points, write_to_sheet, send_to_api,
+            count_points, write_to_sheet, send_to_api, group_name,
         ))
     if not rules:
         raise RuleError("Sheet Group DV không có dòng ánh xạ dịch vụ hợp lệ")

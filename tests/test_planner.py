@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ats_onebss.models import Member, ProjectRule, ServiceRule, Ticket
+from ats_onebss.models import Member, ProjectRoute, ProjectRule, ServiceRule, Ticket
 from ats_onebss.planner import plan_assignments
 from ats_onebss.rules import member_score_key
 from ats_onebss.text import assignment_cohort_key
@@ -39,6 +39,49 @@ def test_dual_group_employee_is_balanced_against_current_service_group():
     assigned = {item.ticket.service: item.assignees for item in result}
     assert assigned["Fiber"] == ("An",)
     assert assigned["SMS Brandname"] == ("Lê Đức Tuấn",)
+
+
+def test_project_route_is_limited_to_configured_service_groups():
+    project = ProjectRule(
+        name="Dự án BCA",
+        contains="Cục Viễn Thông & Cơ Yếu BCA",
+        match_fields=("customer_name",),
+        priority=90,
+        route_field="labor_address",
+        routes=(ProjectRoute("Project Owner", ("Hà Nội",)),),
+        service_groups=("Fiber", "Mega LT"),
+    )
+    ordinary_rule = ServiceRule(
+        3, "Tên miền Việt Nam", Decimal("10"), "",
+        (Member("Ordinary Owner", "Nhóm 1", "Chính"),),
+        service_group="Tên miền",
+    )
+    ordinary_ticket = Ticket(
+        "GD-ORDINARY", "TB-ORDINARY", "Tên miền Việt Nam",
+        customer_name="Cục Viễn Thông & Cơ Yếu BCA",
+        labor_address="Thành phố Hà Nội",
+    )
+    result = plan_assignments(
+        [ordinary_ticket], [ordinary_rule], project_rules=[project]
+    )
+    assert result[0].project_name == ""
+    assert result[0].assignees == ("Ordinary Owner",)
+
+    project_rule = ServiceRule(
+        4, "Fiber", Decimal("10"), "",
+        (Member("Project Owner", "Nhóm 1", "Chính"),),
+        service_group="Fiber",
+    )
+    project_ticket = Ticket(
+        "GD-PROJECT", "TB-PROJECT", "Fiber",
+        customer_name="Cục Viễn Thông & Cơ Yếu BCA",
+        labor_address="Thành phố Hà Nội",
+    )
+    routed = plan_assignments(
+        [project_ticket], [project_rule], project_rules=[project]
+    )
+    assert routed[0].project_name == "Dự án BCA"
+    assert routed[0].assignees == ("Project Owner",)
 
 
 def test_balances_points_and_splits_between_groups():

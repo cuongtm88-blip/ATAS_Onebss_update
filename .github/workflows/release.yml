@@ -1,17 +1,10 @@
-name: Release ATS OneBSS for macOS and Windows
+name: Build ATS OneBSS Miền Bắc for macOS
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build-macos:
-    if: github.event_name == 'push'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -28,38 +21,3 @@ jobs:
         with:
           name: macos-arm64
           path: dist/ATS-OneBSS-macOS-arm64-*.zip
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Build app
-        shell: pwsh
-        run: ./scripts/build_app.ps1
-      - name: Package app
-        shell: pwsh
-        run: |
-          $version = uv run python -c "from ats_onebss import __version__; print(__version__)"
-          Compress-Archive -Path "dist/ATS-OneBSS" -DestinationPath "dist/ATS-OneBSS-Windows-x64-$version.zip"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-x64
-          path: dist/ATS-OneBSS-Windows-x64-*.zip
-
-  publish-release:
-    if: github.event_name == 'push'
-    needs: [build-macos, build-windows]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: release-assets/*
-          body: |
-            - Mở nhóm nhiệm vụ OneBSS và chọn đúng nhiệm vụ từ danh sách.
-            - Xác nhận dòng Google Sheet bằng CSV export theo gid, tránh GViz trả thiếu dữ liệu phiếu.
-            - Gói ứng dụng cho macOS Apple Silicon và Windows x64.

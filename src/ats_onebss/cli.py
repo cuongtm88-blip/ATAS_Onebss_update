@@ -350,7 +350,10 @@ async def collect_plan(
                         excluded_members,
                     )
                 else:
-                    project = match_project_rule(project_rules, ticket)
+                    project = match_project_rule(
+                        project_rules, ticket,
+                        current_rule.service_group if current_rule else "",
+                    )
                     if project:
                         available = [
                             name for name in project.assignees

@@ -293,7 +293,9 @@ def plan_assignments(
         if manual_assignee:
             groups = {"Chỉ định thủ công": [manual_assignee]}
             try:
-                project = match_project_rule(project_rules or [], ticket)
+                project = match_project_rule(
+                    project_rules or [], ticket, rule.service_group
+                )
             except RuleError:
                 project = None
             project_name = project.project_name if project else ""
@@ -322,7 +324,9 @@ def plan_assignments(
                 for index, assignee in enumerate(preferred, start=1)
             }
             try:
-                project = match_project_rule(project_rules or [], ticket)
+                project = match_project_rule(
+                    project_rules or [], ticket, rule.service_group
+                )
             except RuleError:
                 project = None
             project_name = project.project_name if project else ""
@@ -338,7 +342,9 @@ def plan_assignments(
             # self-contained dispatch rules and must keep their Excel owner,
             # even when customer text also happens to match a named project.
             project = (
-                match_project_rule(project_rules or [], ticket)
+                match_project_rule(
+                    project_rules or [], ticket, rule.service_group
+                )
                 if rule.write_to_sheet else None
             )
             if project:

@@ -12,6 +12,7 @@ from ats_onebss.updater import (
     latest_update,
     stage_update,
 )
+import ats_onebss.updater as updater
 
 
 class FakeResponse:
@@ -69,6 +70,22 @@ def test_latest_update_returns_none_for_current_version(monkeypatch):
     )
 
     assert latest_update("example/app", "0.9.16", "darwin", "arm64") is None
+
+
+def test_github_requests_use_native_mac_trust_store_with_verification(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout, **kwargs):
+        captured["context"] = kwargs.get("context")
+        return FakeResponse(b"{}")
+
+    monkeypatch.setattr(updater.sys, "platform", "darwin")
+    monkeypatch.setattr(updater.urllib.request, "urlopen", fake_urlopen)
+
+    updater._verified_urlopen("https://api.github.com", timeout=20)
+
+    assert captured["context"] is not None
+    assert captured["context"].verify_mode == updater.ssl.CERT_REQUIRED
 
 
 def test_latest_update_rejects_invalid_repository_before_network():

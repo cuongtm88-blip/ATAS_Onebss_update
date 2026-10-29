@@ -224,6 +224,7 @@ def test_watch_retries_failed_cycle_without_normal_interval(tmp_path, monkeypatc
         poll_interval_minutes=15,
         error_retry_seconds=3,
         timezone="Asia/Ho_Chi_Minh",
+        attendance_calendar_file=None,
     )
     delays = []
     attempts = 0

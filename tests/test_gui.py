@@ -205,6 +205,43 @@ fixed_assignee = "Đào Anh Vũ"
     }
 
 
+def test_project_rule_sync_adds_new_groups_and_btc_alias_without_losing_routes(tmp_path):
+    runtime = tmp_path / "project_rules.toml"
+    runtime.write_text('''[[projects]]
+name = "Dự án BTC"
+priority = 90
+match_fields = ["customer_name"]
+contains = ["Kho Bạc Nhà Nước"]
+route_field = "labor_address"
+[[projects.routes]]
+assignee = "Người phụ trách tùy chỉnh"
+locations = ["Hà Nội"]
+''', encoding="utf-8")
+    packaged = tmp_path / "package.toml"
+    packaged.write_text('''[[projects]]
+name = "Dự án BTC"
+priority = 90
+required_service_groups = ["Fiber", "Mega NT"]
+match_fields = ["customer_name"]
+contains = ["Kho Bạc Nhà Nước", "Cục Tin Học Và Thống Kê Tài Chính"]
+route_field = "labor_address"
+[[projects.routes]]
+assignee = "Người mặc định"
+locations = ["Hà Nội"]
+''', encoding="utf-8")
+
+    backup = gui.sync_missing_project_rules(runtime, packaged)
+    rules = gui.load_project_rules(runtime)
+
+    assert backup is not None
+    assert rules[0].required_service_groups == ("Fiber", "Mega NT")
+    assert {rule.contains for rule in rules} == {
+        "Kho Bạc Nhà Nước", "Cục Tin Học Và Thống Kê Tài Chính"
+    }
+    assert all(rule.routes[0].assignee == "Người phụ trách tùy chỉnh" for rule in rules)
+    assert gui.sync_missing_project_rules(runtime, packaged) is None
+
+
 def test_install_rules_file_validates_replaces_and_keeps_backup(tmp_path):
     source = gui.resource_root() / "Giao phiếu.xlsx"
     target = tmp_path / "Giao phiếu.xlsx"
@@ -224,7 +261,7 @@ def test_install_rules_file_accepts_group_percentage_workbook(tmp_path):
     backup = gui.install_rules_file(source, target)
 
     assert backup is None
-    assert len(gui.load_rules(target)) == 60
+    assert len(gui.load_rules(target)) == 65
 
 
 def test_install_rules_file_rejects_non_excel_file(tmp_path):

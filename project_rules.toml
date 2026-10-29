@@ -6,6 +6,7 @@
 [[projects]]
 name = "Đài THVN"
 priority = 100
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 match_fields = ["subscriber_name"]
 contains = "Đài THVN"
 fixed_assignee = "Nguyễn Hoàng Dương"
@@ -13,6 +14,7 @@ fixed_assignee = "Nguyễn Hoàng Dương"
 [[projects]]
 name = "Đài Phát Thanh - Truyền Hình Hà Nội"
 priority = 100
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 match_fields = ["customer_name"]
 contains = "ĐÀI PHÁT THANH - TRUYỀN HÌNH HÀ NỘI"
 fixed_assignee = "Nguyễn Hoàng Dương"
@@ -20,6 +22,7 @@ fixed_assignee = "Nguyễn Hoàng Dương"
 [[projects]]
 name = "Cục Quản Trị NHNN - Kênh phục vụ HNTH"
 priority = 95
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 match_fields = ["customer_name"]
 contains = "Cục Quản Trị Ngân Hàng Nhà Nước Việt Nam"
 required_contains = { notes = "Kênh phục vụ HNTH" }
@@ -28,6 +31,7 @@ fixed_assignee = "Nguyễn Hoàng Dương"
 [[projects]]
 name = "Dự án BCA"
 priority = 90
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 # OneBSS có thể hiển thị tên khách hàng ở cột Tên KH hoặc Tên thuê bao.
 match_fields = ["customer_name", "subscriber_name"]
 contains = "Cục Viễn Thông & Cơ Yếu Bca"
@@ -134,6 +138,7 @@ locations = [
 [[projects]]
 name = "Dự án BHXH"
 priority = 90
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 match_fields = ["customer_name"]
 contains = "Ban Quản Lý Đầu Tư Và Xây Dựng Ngành Bảo Hiểm Xã Hội"
 route_field = "labor_address"
@@ -209,6 +214,7 @@ subscriber_prefixes = ["bgt2"]
 [[projects]]
 name = "Dự án Xổ số"
 priority = 90
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 match_fields = ["customer_name"]
 contains = "Xổ Số Kiến Thiết Thủ Đô"
 route_field = "labor_address"
@@ -250,6 +256,7 @@ subscriber_prefixes = ["bgt2"]
 [[projects]]
 name = "Dự án BTC"
 priority = 90
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 # OneBSS can expose the project customer in either the Tên KH detail or
 # the Tên thuê bao grid field. Match both so incomplete detail reads cannot
 # send a known BTC ticket through ordinary service balancing.
@@ -257,6 +264,7 @@ match_fields = ["customer_name", "subscriber_name"]
 contains = [
   "Tổng Cục Dự Trữ Nhà Nước",
   "Cục Công Nghệ Thông Tin & Thống Kê Hải Quan",
+  "Cục Tin Học Và Thống Kê Tài Chính",
   "Kho Bạc Nhà Nước",
 ]
 route_field = "labor_address"
@@ -291,6 +299,7 @@ locations = [
 [[projects]]
 name = "Dự án BTC"
 priority = 90
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 match_fields = ["customer_name", "subscriber_name"]
 contains = "Tổng Cục Thuế"
 route_field = "labor_address"
@@ -325,6 +334,7 @@ locations = [
 [[projects]]
 name = "Dự án Cục BĐTW"
 priority = 90
+required_service_groups = ["Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng", "Internet trực tiếp"]
 match_fields = ["customer_name"]
 contains = "Cục BĐTW"
 route_field = "labor_address"

@@ -94,8 +94,12 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
             if str(value).strip()
         )
         points_multiplier = Decimal(str(item.get("points_multiplier", 1)))
+        # Installed 0.9.68–0.9.73 rule files used `service_groups`. Keep
+        # those user-owned files effective when returning to the 0.9.64 base.
         required_service_groups = tuple(
-            str(value).strip() for value in item.get("required_service_groups", [])
+            str(value).strip() for value in item.get(
+                "required_service_groups", item.get("service_groups", [])
+            )
             if str(value).strip()
         )
         is_project = bool(item.get("is_project", True))

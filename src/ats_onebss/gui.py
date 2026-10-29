@@ -124,11 +124,7 @@ def user_data_root() -> Path:
 
 
 def sync_missing_project_rules(runtime_path: Path, packaged_path: Path) -> Path | None:
-    """Append bundled rules absent from the user's preserved project config.
-
-    Existing same-named rules remain user-owned and are never overwritten.
-    The original file is backed up before adding any new bundled rule blocks.
-    """
+    """Merge new North rule conditions without replacing user routes."""
     runtime_path = Path(runtime_path)
     packaged_path = Path(packaged_path)
     if (
@@ -147,32 +143,73 @@ def sync_missing_project_rules(runtime_path: Path, packaged_path: Path) -> Path 
     def rule_name_key(value: object) -> str:
         return unicodedata.normalize("NFC", str(value or "")).strip().casefold()
 
+    def split_blocks(value: str) -> tuple[str, list[str]]:
+        markers = list(re.finditer(r"(?m)^\[\[projects\]\]\s*$", value))
+        return value[:markers[0].start()] if markers else value, [
+            value[match.start():markers[index + 1].start() if index + 1 < len(markers) else len(value)]
+            for index, match in enumerate(markers)
+        ]
+
+    runtime_prefix, runtime_blocks = split_blocks(runtime_text)
+    _packaged_prefix, packaged_blocks = split_blocks(packaged_text)
+    if len(runtime_blocks) != len(runtime_data.get("projects", [])) or len(packaged_blocks) != len(packaged_data.get("projects", [])):
+        return None
     existing_names = {
         rule_name_key(item.get("name", ""))
-        for item in runtime_data.get("projects", [])
-        if item.get("name")
+        for item in runtime_data.get("projects", []) if item.get("name")
     }
-    blocks = list(re.finditer(r"(?m)^\[\[projects\]\]\s*$", packaged_text))
-    if len(blocks) != len(packaged_data.get("projects", [])):
-        return None
+
+    def first_contains(item: dict) -> str:
+        value = item.get("contains", "")
+        return rule_name_key(value[0] if isinstance(value, list) and value else value)
+
+    packaged_items = packaged_data.get("projects", [])
     additions: list[str] = []
-    for index, match in enumerate(blocks):
-        end = blocks[index + 1].start() if index + 1 < len(blocks) else len(packaged_text)
-        block = packaged_text[match.start():end].strip()
-        try:
-            parsed = tomllib.loads(block)
-        except tomllib.TOMLDecodeError:
-            return None
-        items = parsed.get("projects", [])
-        if len(items) != 1:
-            return None
-        name = rule_name_key(items[0].get("name", ""))
-        if name and name not in existing_names:
-            additions.append(block)
+    for item, block in zip(packaged_items, packaged_blocks, strict=True):
+        name = rule_name_key(item.get("name", ""))
+        # BTC has two independently routed aliases with the same display name.
+        exists = (
+            any(rule_name_key(old.get("name")) == name and
+                first_contains(old) == first_contains(item)
+                for old in runtime_data.get("projects", []))
+            if name == rule_name_key("Dự án BTC") else name in existing_names
+        )
+        if name and not exists:
+            additions.append(block.strip())
+
+    changed = False
+    for index, item in enumerate(runtime_data.get("projects", [])):
+        name = rule_name_key(item.get("name", ""))
+        packaged = next((candidate for candidate in packaged_items
+            if rule_name_key(candidate.get("name", "")) == name
+            and first_contains(candidate) == first_contains(item)), None)
+        if packaged is None:
+            continue
+        block = runtime_blocks[index]
+        groups = packaged.get("required_service_groups", [])
+        if groups and not item.get("required_service_groups") and not item.get("service_groups"):
+            line = "required_service_groups = " + json.dumps(groups, ensure_ascii=False) + "\n"
+            block, count = re.subn(r"(?m)^(priority\s*=\s*\d+\s*\n)",
+                lambda match: match.group(1) + line, block, count=1)
+            changed |= bool(count)
+        old_aliases = item.get("contains", "")
+        new_aliases = packaged.get("contains", "")
+        if isinstance(old_aliases, list) and isinstance(new_aliases, list):
+            missing = [value for value in new_aliases if rule_name_key(value) not in
+                {rule_name_key(old) for old in old_aliases}]
+            if missing:
+                merged = old_aliases + missing
+                replacement = "contains = [\n" + "".join(
+                    "  " + json.dumps(value, ensure_ascii=False) + ",\n"
+                    for value in merged) + "]"
+                block, count = re.subn(r"contains\s*=\s*\[[^]]*\]", replacement,
+                    block, count=1, flags=re.S)
+                changed |= bool(count)
+        runtime_blocks[index] = block
     # A malformed/partial packaged file should not silently erase custom data.
-    if len(runtime_data.get("projects", [])) and not blocks:
+    if len(runtime_data.get("projects", [])) and not packaged_blocks:
         return None
-    if not additions:
+    if not additions and not changed:
         return None
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -184,7 +221,9 @@ def sync_missing_project_rules(runtime_path: Path, packaged_path: Path) -> Path 
     staging = runtime_path.with_name(f".{runtime_path.name}.syncing")
     shutil.copy2(runtime_path, backup)
     try:
-        updated = runtime_text.rstrip() + "\n\n" + "\n\n".join(additions) + "\n"
+        updated = runtime_prefix + "".join(runtime_blocks)
+        if additions:
+            updated = updated.rstrip() + "\n\n" + "\n\n".join(additions) + "\n"
         # Validate the merged TOML before atomically replacing the runtime copy.
         tomllib.loads(updated)
         staging.write_text(updated, encoding="utf-8")

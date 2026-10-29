@@ -1843,15 +1843,40 @@ class OneBSSClient:
                     + self.session.config.timeout_ms / 1000
                 )
                 while asyncio.get_running_loop().time() < deadline:
-                    if await _row_has_selected_task(
-                        employee_rows, assignee, self.session.config.task
-                    ):
-                        return dialog
+                    # Selecting a Vue TreeSelect option can replace the whole
+                    # Syncfusion employee grid. Reacquire it instead of polling
+                    # through employee_rows, which may still be scoped to the
+                    # detached pre-selection dialog subtree.
+                    try:
+                        current_dialog, current_grid = await _visible_employee_grid(
+                            self.page,
+                            min(1_000, self.session.config.timeout_ms),
+                        )
+                        current_rows = current_grid.locator(
+                            ".e-gridcontent tr.e-row"
+                        )
+                        if await _row_has_selected_task(
+                            current_rows, assignee, self.session.config.task
+                        ):
+                            return current_dialog
+                    except Exception:
+                        # OneBSS briefly removes and recreates this grid while
+                        # Vue applies the selection. Keep polling until the
+                        # configured timeout instead of failing on that gap.
+                        pass
                     await asyncio.sleep(0.25)
                 raise RuntimeError("Nhiệm vụ chưa xuất hiện trên dòng nhân viên")
             except Exception as error:
                 last_error = error
-                await self.page.keyboard.press("Escape")
+                # Escape is only safe while the TreeSelect menu is actually
+                # open. Sending it unconditionally can close the entire
+                # assignment dialog, making all remaining retries fail to find
+                # its employee grid.
+                task_portal = self.page.locator(
+                    ".vue-treeselect__portal-target.vue-treeselect--open"
+                )
+                if await task_portal.count() and await task_portal.first.is_visible():
+                    await self.page.keyboard.press("Escape")
                 await self.page.wait_for_timeout(500)
         raise AssignmentPopupError(
             f"Không chọn được nhiệm vụ cho {assignee} sau 3 lần thử: {last_error}"

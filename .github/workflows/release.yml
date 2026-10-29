@@ -1,4 +1,4 @@
-name: Release ATS OneBSS Miền Bắc for macOS and Windows
+name: Release ATS OneBSS Miền Bắc for macOS
 
 on:
   push:
@@ -14,6 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Run tests
+        run: |
+          uv sync --extra dev --extra packaging
+          uv run pytest -q
       - name: Build app
         run: ./scripts/build_app.sh
       - name: Package app
@@ -22,32 +26,31 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             "dist/ATS-OneBSS-${version}.app" \
             "dist/ATS-OneBSS-macOS-arm64-${version}.zip"
+      - name: Verify release package
+        run: |
+          set -eu
+          version="$(uv run python -c 'from ats_onebss import __version__; print(__version__)')"
+          app="dist/ATS-OneBSS-${version}.app"
+          zip="dist/ATS-OneBSS-macOS-arm64-${version}.zip"
+          actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+          test "$actual" = "$version"
+          codesign --verify --deep --strict "$app"
+          unzip -t "$zip"
+          check_dir="$(mktemp -d)"
+          ditto -x -k "$zip" "$check_dir"
+          extracted="$check_dir/ATS-OneBSS-${version}.app"
+          codesign --verify --deep --strict "$extracted"
+          test -f "$extracted/Contents/Frameworks/assignment_rules.xlsx"
+          test -f "$extracted/Contents/Frameworks/project_rules.toml"
+          grep -q 'Cục Tin Học Và Thống Kê Tài Chính' "$extracted/Contents/Frameworks/project_rules.toml"
+          uv run python -c 'from ats_onebss.rules import load_rules; from pathlib import Path; import sys; rules=load_rules(Path(sys.argv[1])); assert len(rules) == 67; print(f"Verified packaged rules: {len(rules)}")' "$extracted/Contents/Frameworks/assignment_rules.xlsx"
       - uses: actions/upload-artifact@v4
         with:
           name: macos-arm64
           path: dist/ATS-OneBSS-macOS-arm64-*.zip
 
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Build app
-        shell: pwsh
-        run: ./scripts/build_app.ps1
-      - name: Package app
-        shell: pwsh
-        run: |
-          $version = uv run python -c "from ats_onebss import __version__; print(__version__)"
-          Compress-Archive -Path "dist/ATS-OneBSS" -DestinationPath "dist/ATS-OneBSS-Windows-x64-$version.zip"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-x64
-          path: dist/ATS-OneBSS-Windows-x64-*.zip
-
   publish-release:
-    if: always() && needs.build-windows.result == 'success' && (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped')
-    needs: [build-macos, build-windows]
+    needs: [build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -60,4 +63,4 @@ jobs:
           body: |
             - Bản tiêu chuẩn dành riêng cho Miền Bắc, phát triển từ mã nguồn ATS OneBSS 0.9.41.
             - Chỉ đóng gói cấu hình, quy tắc và workbook Miền Bắc.
-            - Gói ứng dụng cho Windows x64 và macOS Apple Silicon.
+            - Gói ứng dụng chỉ dành cho macOS Apple Silicon.

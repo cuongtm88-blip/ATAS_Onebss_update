@@ -304,7 +304,7 @@ def test_demo2_percentage_workbook_expands_service_map_and_preserves_api_flags()
     workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
     rules = load_rules(workbook)
 
-    assert len(rules) == 65
+    assert len(rules) == 67
     sip = match_rule(rules, Ticket("GD1", "TB1", "ISDN 30B+D cáp đồng"))
     assert sip.sheet_service == "SIP"
     assert {member.name: member.target_share for member in sip.members} == {
@@ -322,10 +322,15 @@ def test_demo2_service_map_uses_channel_and_installation_conditions():
     rules = load_rules(workbook)
 
     local = match_rule(rules, Ticket("GD1", "TB1", "MegaWan", channel_type="Nội tỉnh"))
+    merged_local = match_rule(
+        rules, Ticket("GD1b", "TB1b", "MegaWan", channel_type="Nội tỉnh sáp nhập qua NET")
+    )
     interprovincial = match_rule(
         rules, Ticket("GD2", "TB2", "MegaWan", channel_type="Liên tỉnh")
     )
     assert local.service_group == "Mega NT"
+    assert merged_local.service_group == "Mega NT"
+    assert merged_local.sheet_service == "Megawan NT"
     assert interprovincial.service_group == "Mega LT"
     assert local.sheet_service == "Megawan NT"
     assert local.points == Decimal("17")

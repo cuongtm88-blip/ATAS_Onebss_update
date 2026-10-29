@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import codecs
 import csv
+import hashlib
 import json
 import os
 import re
@@ -106,6 +107,16 @@ RESOURCE_FILES = (
     "Giao phiếu_demo2.xlsx",
     "attendance_calendar.json",
 )
+PACKAGED_RESOURCE_ALIASES = {
+    # Keep non-ASCII workbook names out of the signed macOS bundle. macOS
+    # normalizes those names while extracting ZIPs, which invalidates the
+    # ad-hoc resource seal. The runtime copy keeps the existing public name.
+    "Giao phiếu_demo2.xlsx": "assignment_rules.xlsx",
+}
+PREVIOUS_BUNDLED_RULES_SHA256 = {
+    # Workbook bundled by 0.9.75, used to safely migrate default installs.
+    "35758b27561e4d8617dbabfc4f6eb11c43c0029a8f95d2e5d1875d7dfa415f46",
+}
 
 
 def resource_root() -> Path:
@@ -253,6 +264,8 @@ def prepare_runtime_root() -> Path:
 
     target = user_data_root()
     target.mkdir(parents=True, exist_ok=True)
+    runtime_rules = target / "Giao phiếu_demo2.xlsx"
+    bundled_rules_marker = target / ".bundled_rules_sha256"
     for relative in RESOURCE_FILES:
         source_file = source / relative
         if not source_file.exists():
@@ -263,11 +276,32 @@ def prepare_runtime_root() -> Path:
                     if unicodedata.normalize("NFC", item.name) == wanted_name
                 )
             except (FileNotFoundError, StopIteration):
-                pass
+                alias = PACKAGED_RESOURCE_ALIASES.get(relative)
+                if alias:
+                    source_file = source / alias
         target_file = target / relative
-        if source_file.exists() and not target_file.exists():
+        should_copy = source_file.exists() and not target_file.exists()
+        if source_file.exists() and target_file.exists() and relative == runtime_rules.name:
+            source_hash = hashlib.sha256(source_file.read_bytes()).hexdigest()
+            runtime_hash = hashlib.sha256(target_file.read_bytes()).hexdigest()
+            try:
+                managed_hash = bundled_rules_marker.read_text(encoding="ascii").strip()
+            except OSError:
+                managed_hash = ""
+            if not managed_hash and runtime_hash in PREVIOUS_BUNDLED_RULES_SHA256:
+                managed_hash = runtime_hash
+            if managed_hash and runtime_hash == managed_hash and runtime_hash != source_hash:
+                should_copy = True
+            elif managed_hash and runtime_hash != managed_hash:
+                bundled_rules_marker.unlink(missing_ok=True)
+        if should_copy:
             target_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_file, target_file)
+            if relative == runtime_rules.name:
+                bundled_rules_marker.write_text(
+                    hashlib.sha256(source_file.read_bytes()).hexdigest(),
+                    encoding="ascii",
+                )
     sync_missing_project_rules(
         target / "project_rules.toml", source / "project_rules.toml"
     )
@@ -276,12 +310,12 @@ def prepare_runtime_root() -> Path:
     # only when that editable source is newer, so a manual runtime adjustment
     # is never overwritten by an older bundled default.
     editable_rules = editable_rules_file()
-    runtime_rules = target / "Giao phiếu_demo2.xlsx"
     if editable_rules and (
         not runtime_rules.exists()
         or editable_rules.stat().st_mtime_ns > runtime_rules.stat().st_mtime_ns
     ):
         shutil.copy2(editable_rules, runtime_rules)
+        bundled_rules_marker.unlink(missing_ok=True)
     return target
 
 

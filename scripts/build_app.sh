@@ -6,6 +6,8 @@ uv sync --extra packaging
 VERSION="$(uv run python -c 'from ats_onebss import __version__; print(__version__)')"
 APP_NAME="ATS-OneBSS-${VERSION}"
 ./scripts/build_macos_icon.sh
+mkdir -p build
+cp "Giao phiếu_demo2.xlsx" build/assignment_rules.xlsx
 uv run pyinstaller \
   --noconfirm \
   --clean \
@@ -19,7 +21,7 @@ uv run pyinstaller \
   --add-data "regions.toml:." \
   --add-data "config.toml:." \
   --add-data "project_rules.toml:." \
-  --add-data "Giao phiếu_demo2.xlsx:." \
+  --add-data "build/assignment_rules.xlsx:." \
   --add-data "attendance_calendar.json:." \
   --add-data "assets/vinaphone-logo.png:assets" \
   src/ats_onebss/gui_main.py

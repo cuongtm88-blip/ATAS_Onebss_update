@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import time
@@ -91,6 +92,16 @@ def _safe_error(error: BaseException, token: str = "") -> str:
     return message[:1200]
 
 
+def _telegram_urlopen(request: Request, timeout: int):
+    """Use macOS system trust roots without disabling TLS verification."""
+    if sys.platform == "darwin":
+        import truststore
+
+        context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        return urlopen(request, timeout=timeout, context=context)
+    return urlopen(request, timeout=timeout)
+
+
 def send_message(token: str, chat_id: str, message: str, timeout: int = 12) -> None:
     clean_token = token.strip()
     clean_chat_id = chat_id.strip()
@@ -112,7 +123,7 @@ def send_message(token: str, chat_id: str, message: str, timeout: int = 12) -> N
         method="POST",
     )
     try:
-        with urlopen(request, timeout=timeout) as response:
+        with _telegram_urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         try:
@@ -145,7 +156,7 @@ def _telegram_updates(token: str, offset: int | None, timeout: int) -> list[dict
     )
     try:
         with _updates_lock():
-            with urlopen(request, timeout=max(5, timeout + 5)) as response:
+            with _telegram_urlopen(request, timeout=max(5, timeout + 5)) as response:
                 payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         try:
@@ -158,7 +169,8 @@ def _telegram_updates(token: str, offset: int | None, timeout: int) -> list[dict
             ) from None
         raise TelegramError("Không đọc được mã OTP từ Telegram.") from None
     except (URLError, TimeoutError, OSError, ValueError) as error:
-        raise TelegramError("Không đọc được mã OTP từ Telegram.") from error
+        detail = _safe_error(error, token)
+        raise TelegramError(f"Không đọc được mã OTP từ Telegram: {detail}") from None
     if not payload.get("ok") or not isinstance(payload.get("result"), list):
         raise TelegramError("Telegram không trả về danh sách tin nhắn OTP hợp lệ.")
     return payload["result"]

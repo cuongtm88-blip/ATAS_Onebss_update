@@ -9,6 +9,7 @@ import re
 import shlex
 import shutil
 import stat
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -56,6 +57,16 @@ class InstallTarget:
     executable_name: str
 
 
+def _verified_urlopen(request, timeout: int):
+    """Use macOS system trust roots while preserving certificate checks."""
+    if sys.platform == "darwin":
+        import truststore
+
+        context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        return urllib.request.urlopen(request, timeout=timeout, context=context)
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 def _version_tuple(value: str) -> tuple[int, int, int]:
     match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", value.strip())
     if not match:
@@ -101,7 +112,7 @@ def latest_update(
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with _verified_urlopen(request, timeout=20) as response:
             payload = json.loads(response.read(2_000_001))
     except urllib.error.HTTPError as error:
         if error.code == 404:
@@ -164,7 +175,7 @@ def download_asset(release: UpdateRelease, directory: Path) -> Path:
     digest = hashlib.sha256()
     total = 0
     try:
-        with urllib.request.urlopen(request, timeout=60) as response, temporary.open("wb") as output:
+        with _verified_urlopen(request, timeout=60) as response, temporary.open("wb") as output:
             final = urllib.parse.urlparse(response.geturl())
             if final.scheme != "https" or final.hostname not in {
                 "github.com", "release-assets.githubusercontent.com",

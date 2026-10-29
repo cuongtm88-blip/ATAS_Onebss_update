@@ -16,10 +16,11 @@ class FakeResponse:
 def test_send_message_posts_encoded_chat_and_text(monkeypatch):
     captured = {}
 
-    def fake_urlopen(request, timeout):
+    def fake_urlopen(request, timeout, **kwargs):
         captured["url"] = request.full_url
         captured["body"] = request.data.decode("utf-8")
         captured["timeout"] = timeout
+        captured["context"] = kwargs.get("context")
         return FakeResponse()
 
     monkeypatch.setattr(telegram, "urlopen", fake_urlopen)
@@ -30,6 +31,35 @@ def test_send_message_posts_encoded_chat_and_text(monkeypatch):
     assert "chat_id=-100123" in captured["body"]
     assert "L%E1%BB%97i+%C4%91%C4%83ng+nh%E1%BA%ADp" in captured["body"]
     assert captured["timeout"] == 12
+    if telegram.sys.platform == "darwin":
+        assert captured["context"] is not None
+
+
+def test_telegram_updates_uses_macos_truststore(monkeypatch):
+    calls = {}
+
+    class FakeContext:
+        def __init__(self, protocol):
+            calls["protocol"] = protocol
+
+    monkeypatch.setattr(telegram.sys, "platform", "darwin")
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "truststore",
+        type("Truststore", (), {"SSLContext": FakeContext}),
+    )
+    monkeypatch.setattr(
+        telegram, "urlopen",
+        lambda request, timeout, context=None: calls.update(
+            request=request, timeout=timeout, context=context
+        ) or FakeResponse(),
+    )
+
+    telegram._telegram_urlopen(telegram.Request("https://example.test"), 7)
+
+    assert calls["protocol"] == telegram.ssl.PROTOCOL_TLS_CLIENT
+    assert calls["timeout"] == 7
+    assert isinstance(calls["context"], FakeContext)
 
 
 def test_resume_command_requires_configured_private_chat():

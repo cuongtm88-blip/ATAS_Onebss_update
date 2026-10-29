@@ -19,11 +19,12 @@ def test_ingest_api_payload_uses_exact_field_names_without_status(monkeypatch):
         def read(self):
             return b'{"ok":true,"invalid":[]}'
 
-    def fake_urlopen(request, timeout):
+    def fake_urlopen(request, timeout, **kwargs):
         request_data["url"] = request.full_url
         request_data["headers"] = dict(request.header_items())
         request_data["body"] = request.data
         request_data["timeout"] = timeout
+        request_data["context"] = kwargs.get("context")
         return Response()
 
     monkeypatch.setattr("ats_onebss.ingest.urlopen", fake_urlopen)

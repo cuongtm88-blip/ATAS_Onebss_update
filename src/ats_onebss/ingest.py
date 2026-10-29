@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import ssl
+import sys
 import time
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -15,6 +17,16 @@ INGEST_API_TOKEN_ENV = "ATS_ONEBSS_INGEST_API_TOKEN"
 
 class IngestApiError(RuntimeError):
     """A safe, user-presentable error from the ticket ingestion API."""
+
+
+def _verified_urlopen(request: Request, timeout: int):
+    """Use macOS system trust roots and keep API TLS verification enabled."""
+    if sys.platform == "darwin":
+        import truststore
+
+        context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        return urlopen(request, timeout=timeout, context=context)
+    return urlopen(request, timeout=timeout)
 
 
 class IngestApiClient:
@@ -65,7 +77,7 @@ class IngestApiClient:
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                with urlopen(request, timeout=25) as response:
+                with _verified_urlopen(request, timeout=25) as response:
                     payload = json.loads(response.read().decode("utf-8"))
                 if not isinstance(payload, dict) or not payload.get("ok"):
                     raise IngestApiError("API không xác nhận đã nhận phiếu.")
@@ -85,8 +97,11 @@ class IngestApiClient:
                     raise IngestApiError(message) from None
                 last_error = IngestApiError(message)
             except (URLError, TimeoutError, OSError, ValueError) as error:
+                detail = getattr(error, "reason", error)
+                detail_text = str(detail).strip()
                 last_error = IngestApiError(
                     f"Không kết nối/đọc được API phiếu: {type(error).__name__}"
+                    + (f" ({detail_text[:240]})" if detail_text else "")
                 )
             if attempt < 2:
                 time.sleep(2)

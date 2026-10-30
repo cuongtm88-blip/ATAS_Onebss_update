@@ -407,6 +407,7 @@ async def collect_plan(
     }
     for service, owners in getattr(sheet_assignees, "service_assignments", {}).items():
         monthly_service_assignments[service] = dict(owners)
+    planner_skips: dict[str, str] = {}
     assignments = plan_assignments(
         valid,
         rules,
@@ -422,6 +423,12 @@ async def collect_plan(
         cohort_conflicts,
         manual_assignees,
         monthly_service_assignments,
+        planner_skips,
+    )
+    skipped.extend(
+        (ticket, reason)
+        for ticket in valid
+        if (reason := planner_skips.get(ticket.key))
     )
     for ticket in valid:
         pinned = cohort_conflicts.get(ticket.key)

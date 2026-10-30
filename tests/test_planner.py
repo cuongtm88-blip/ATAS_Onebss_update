@@ -598,6 +598,32 @@ def test_returned_voice_xu_ly_keeps_google_sheet_assignee():
     assert result[0].sheet_reassignment is True
 
 
+def test_unknown_voice_vip_with_sheet_history_is_reported_as_skipped():
+    ticket = Ticket("GD1", "TB1", "Voice Brandname", vip_status="")
+    voice_rules = [
+        ServiceRule(
+            10, "Voice Brandname", Decimal("20"),
+            'Cột VIP xử lý = "Giam sat"',
+            (Member("Lê Đức Tuấn", "Nhóm 2", "Chính"),),
+        ),
+        ServiceRule(
+            11, "Voice Brandname", Decimal("20"),
+            'Cột VIP xử lý = "Xu ly"',
+            (Member("Đỗ Thị Thu Trang", "Nhóm 2", "Chính"),),
+        ),
+    ]
+    skipped = {}
+    result = plan_assignments(
+        [ticket], voice_rules,
+        preferred_assignees={"gd1|tb1": ("Lê Đức Tuấn",)},
+        skipped_reasons=skipped,
+    )
+    assert result == []
+    assert skipped == {
+        "GD1|TB1": "Voice Brandname không xác định được VIP xử lý (giá trị hiện tại: '')"
+    }
+
+
 def test_returned_voice_giam_sat_from_le_duc_tuan_marks_reassignment():
     ticket = Ticket("GD1", "TB1", "Voice Brandname", vip_status="Giam sat")
     result = plan_assignments(

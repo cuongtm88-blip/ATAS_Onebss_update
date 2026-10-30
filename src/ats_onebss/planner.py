@@ -32,6 +32,7 @@ def plan_assignments(
     cohort_conflicts: dict[str, str] | None = None,
     manual_assignees: dict[str, str] | None = None,
     service_assignments: dict[str, dict[str, str]] | None = None,
+    skipped_reasons: dict[str, str] | None = None,
 ) -> list[Assignment]:
     scores = {
         normalize(name): Decimal(str(value))
@@ -280,7 +281,16 @@ def plan_assignments(
             )
             if any(normalize(assignee) in excluded for assignee in preferred):
                 continue
-        voice_mode = voice_brandname_mode(rule, ticket)
+        # A per-ticket manual assignment explicitly overrides service rules,
+        # including Voice Brandname's VIP routing requirement. Automatic
+        # tickets with unknown VIP values are filtered earlier by collect_plan.
+        try:
+            voice_mode = "" if manual_assignee else voice_brandname_mode(rule, ticket)
+        except RuleError as error:
+            if skipped_reasons is None:
+                raise
+            skipped_reasons[ticket.key] = str(error)
+            continue
         previous_assignee_is_supervision = bool(
             preferred
             and normalize(preferred[0]) == normalize("Lê Đức Tuấn")

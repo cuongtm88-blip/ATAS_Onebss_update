@@ -44,6 +44,42 @@ jobs:
           test -f "$extracted/Contents/Frameworks/project_rules.toml"
           grep -q 'Cục Tin Học Và Thống Kê Tài Chính' "$extracted/Contents/Frameworks/project_rules.toml"
           uv run python -c 'from ats_onebss.rules import load_rules; from pathlib import Path; import sys; rules=load_rules(Path(sys.argv[1])); assert len(rules) == 67; print(f"Verified packaged rules: {len(rules)}")' "$extracted/Contents/Frameworks/assignment_rules.xlsx"
+          uv run python - "$extracted" <<'PY'
+          from pathlib import Path
+          import tempfile
+          import types
+          from PyInstaller.archive.readers import CArchiveReader, ZlibArchiveReader
+
+          app = Path(__import__("sys").argv[1])
+          executable = app / "Contents/MacOS" / app.stem
+          with tempfile.NamedTemporaryFile(suffix=".pyz") as pyz_file:
+              pyz_file.write(CArchiveReader(str(executable)).extract("PYZ.pyz"))
+              pyz_file.flush()
+              archive = ZlibArchiveReader(pyz_file.name)
+
+              def find_code(code, name):
+                  if isinstance(code, types.CodeType):
+                      if code.co_name == name:
+                          return code
+                      for item in code.co_consts:
+                          found = find_code(item, name)
+                          if found:
+                              return found
+                  return None
+
+              collect_plan = find_code(archive.extract("ats_onebss.cli"), "collect_plan")
+              plan_assignments = find_code(
+                  archive.extract("ats_onebss.planner"), "plan_assignments"
+              )
+              collect_names = (
+                  set(collect_plan.co_varnames)
+                  | set(collect_plan.co_cellvars)
+                  | set(collect_plan.co_freevars)
+              ) if collect_plan else set()
+              assert "planner_skips" in collect_names
+              assert plan_assignments and "skipped_reasons" in plan_assignments.co_varnames
+              print("Verified packaged VIP-skip handling.")
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: macos-arm64

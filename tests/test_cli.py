@@ -165,6 +165,63 @@ def test_collect_plan_skips_voice_ticket_with_unknown_vip_even_with_sheet_histor
     assert "không xác định được VIP xử lý" in skipped[0][1]
 
 
+def test_collect_plan_manual_override_routes_voice_ticket_with_unknown_vip(
+    monkeypatch,
+):
+    rules = [
+        ServiceRule(
+            10, "Voice Brandname", Decimal("20"),
+            'Cột VIP xử lý = "Giam sat"',
+            (Member("Lê Đức Tuấn", "Nhóm 2", "Chính"),),
+            "Voice Brandname",
+        ),
+        ServiceRule(
+            11, "Voice Brandname", Decimal("20"),
+            'Cột VIP xử lý = "Xu ly"',
+            (Member("Đỗ Thị Thu Trang", "Nhóm 2", "Chính"),),
+            "Voice Brandname",
+        ),
+    ]
+    monkeypatch.setattr(cli, "load_rules", lambda _path: rules)
+    monkeypatch.setattr(cli, "load_project_rules", lambda _path: [])
+    ticket = Ticket("GD-MANUAL", "TB-MANUAL", "Voice Brandname")
+
+    class Client:
+        async def visible_tickets(self, *, refresh):
+            return [ticket]
+
+        async def enrich_ticket_details(self, tickets, _projects, _rules):
+            return tickets
+
+    class FakeLedger:
+        def pending_project_routes(self):
+            return {}
+
+        def manual_overrides(self):
+            return {ticket.key: "Lê Đức Tuấn"}
+
+        def service_assignments(self, _year, _month):
+            return {}
+
+        def cohort_assignees(self):
+            return {}
+
+    config = SimpleNamespace(
+        rules_file="rules.xlsx", project_rules_file="projects.toml",
+        excluded_members=(), use_backup_members=False,
+        member_target_ratios={}, timezone="Asia/Ho_Chi_Minh",
+    )
+
+    assignments, skipped, _ = asyncio.run(cli.collect_plan(
+        config, Client(), FakeLedger(), balance_scores={},
+    ))
+
+    assert skipped == []
+    assert len(assignments) == 1
+    assert assignments[0].assignees == ("Lê Đức Tuấn",)
+    assert assignments[0].manual_override is True
+
+
 def test_unique_tickets_keeps_only_one_visible_duplicate_per_cycle():
     tickets = [
         Ticket("GD1", "TB1", "Leasedline GE"),

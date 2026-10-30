@@ -286,6 +286,19 @@ async def collect_plan(
                 manual_assignees[ticket.key] = canonical_assignee
                 valid.append(ticket)
                 continue
+            # Validate the current VIP state before relying on a historical
+            # Google Sheet assignee. When the VIP condition makes match_rule
+            # return no match, history used to admit the ticket here; the
+            # planner then raised on the empty VIP value and failed the cycle.
+            if normalize(ticket.service_type or ticket.service) == normalize(
+                "Voice Brandname"
+            ):
+                vip_status = unaccent(ticket.vip_status)
+                if "giam sat" not in vip_status and "xu ly" not in vip_status:
+                    raise RuleError(
+                        "Voice Brandname không xác định được VIP xử lý "
+                        f"(giá trị hiện tại: {ticket.vip_status!r})"
+                    )
             if customer_rules and not ticket.customer_name:
                 raise RuleError(
                     "Không đọc được Tên KH để kiểm tra phiếu dự án; "

@@ -102,7 +102,10 @@ jobs:
               process_available = find_code(cli, "process_available")
               queue_window = find_code(cli, "_queue_read_window_size")
               load_config = find_code(config_module, "load_config")
-              assert process_available and "Bắt đầu đọc lô" in process_available.co_consts
+              assert process_available and any(
+                  isinstance(value, str) and value.startswith("Bắt đầu đọc lô ")
+                  for value in process_available.co_consts
+              )
               assert queue_window and "read_batch_size" in queue_window.co_consts
               assert load_config and {
                   "1giulYOsX2gjqmgrLqk9fyiOePNhMe-lJ6IIm8cBDBZI",

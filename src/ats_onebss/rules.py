@@ -93,7 +93,10 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
             str(value).strip() for value in item.get("fixed_assignees", [])
             if str(value).strip()
         )
-        points_multiplier = Decimal(str(item.get("points_multiplier", 1)))
+        is_project = bool(item.get("is_project", True))
+        points_multiplier = Decimal(str(
+            item.get("points_multiplier", 1.2 if is_project else 1)
+        ))
         # Installed 0.9.68–0.9.73 rule files used `service_groups`. Keep
         # those user-owned files effective when returning to the 0.9.64 base.
         required_service_groups = tuple(
@@ -102,7 +105,6 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
             )
             if str(value).strip()
         )
-        is_project = bool(item.get("is_project", True))
         if points_multiplier <= 0:
             raise RuleError(f"Quy tắc {name} phải có points_multiplier lớn hơn 0")
         if not fixed_assignee and not fixed_assignees and (not route_field or not routes):

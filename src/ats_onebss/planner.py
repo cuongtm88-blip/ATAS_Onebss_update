@@ -15,6 +15,7 @@ from .rules import (
     voice_brandname_mode,
 )
 from .text import assignment_cohort_key, normalize, ticket_identity, unaccent
+from .ticket_region import sheet_count_status
 
 
 def plan_assignments(
@@ -515,9 +516,17 @@ def plan_assignments(
                     assignees.append(
                         choose_member(members, rule, pick_key, group)
                     )
+        count_status = sheet_count_status(
+            ticket.labor_address, ticket.labor_province
+        )
+        counted_points = (
+            (rule.points * project_multiplier)
+            if rule.count_points and count_status != "Không tính"
+            else Decimal(0)
+        )
         assignment = Assignment(
             ticket, tuple(assignees),
-            (rule.points * project_multiplier) if rule.count_points else Decimal(0), rule.row_number,
+            counted_points, rule.row_number,
             rule.sheet_service or rule.service, project_name,
             sheet_existing=sheet_existing,
             sheet_reassignment=sheet_reassignment,
@@ -525,6 +534,7 @@ def plan_assignments(
             cohort_key=cohort_key,
             send_to_api=rule.send_to_api,
             manual_override=bool(manual_assignee),
+            count_status=count_status,
         )
         if not sheet_existing:
             share = assignment.points_per_person

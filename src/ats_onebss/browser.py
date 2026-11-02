@@ -2280,6 +2280,7 @@ class GoogleSheetClient:
                             else assignment.sheet_reassignment
                         ) else ""
                     ),
+                    "count_status": assignment.count_status,
                 }
                 sheet_name = _sheet_name_for_timestamp(
                     assignment.sheet_timestamp,
@@ -2303,7 +2304,12 @@ class GoogleSheetClient:
             )
             grouped.setdefault(sheet_name, []).append(record)
         for sheet_name, items in grouped.items():
-            rows = [[record[column] for column in self.session.config.sheet_columns] for record in items]
+            rows = [[
+                record.get(column, "")
+                if column == "count_status"
+                else record[column]
+                for column in self.session.config.sheet_columns
+            ] for record in items]
             timestamps = [record.get("sheet_timestamp", "") for record in items]
             ordinals = [int(record.get("sheet_ordinal", 1)) for record in items]
             await self.append_rows(rows, timestamps, sheet_name, ordinals)

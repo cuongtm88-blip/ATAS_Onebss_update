@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from ats_onebss.regions import RegionError, load_regions
+from ats_onebss.ticket_region import sheet_count_status, ticket_region
 
 
 def test_north_only_catalog():
@@ -30,3 +31,23 @@ config = "missing.toml"
 
     with pytest.raises(RegionError, match="đang bật nhưng thiếu"):
         load_regions(catalog_path)
+
+
+@pytest.mark.parametrize(
+    ("address", "labor_province", "expected"),
+    [
+        ("Số 1 phố Huế, Hai Bà Trưng, Hà Nội", "HNI", ""),
+        ("", "Hải Phòng", ""),
+        ("Tầng 3, Quận 1, TP Hồ Chí Minh", "HNI", "Không tính"),
+        ("", "Đà Nẵng", "Không tính"),
+        ("Địa chỉ khách hàng chưa rõ", "", "Chưa xác định"),
+    ],
+)
+def test_sheet_count_status_uses_installation_address_then_labor_province(
+    address, labor_province, expected
+):
+    assert sheet_count_status(address, labor_province) == expected
+
+
+def test_recognized_installation_address_takes_precedence_over_labor_province():
+    assert ticket_region("Văn phòng tại Hà Nội", "TP Hồ Chí Minh") == "north"

@@ -764,7 +764,8 @@ class ATSOneBSSWindow(QMainWindow):
         self.skipped_assignee_combo = QComboBox()
         self.skipped_assignee_combo.setMinimumWidth(190)
         self.skipped_assignee_combo.setToolTip(
-            "Chọn nhân sự nhận riêng cho phiếu đang chọn, không phụ thuộc nhóm quy tắc"
+            "Chọn một hoặc nhiều phiếu; tất cả sẽ được chỉ định cho nhân sự này, "
+            "không phụ thuộc nhóm quy tắc"
         )
         self.assign_skipped_button = QPushButton("Chỉ định người nhận")
         self.cancel_skipped_override_button = QPushButton("Hủy chỉ định")
@@ -776,6 +777,7 @@ class ATSOneBSSWindow(QMainWindow):
         self.skipped_table = QTableWidget()
         self.skipped_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.skipped_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.skipped_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.skipped_table.setAlternatingRowColors(True)
         self.skipped_table.setWordWrap(False)
         self.skipped_table.verticalHeader().setVisible(False)
@@ -1600,35 +1602,59 @@ class ATSOneBSSWindow(QMainWindow):
             self.skipped_detail_text.clear()
 
     def _selected_skipped_ticket(self) -> tuple[str, str] | None:
-        row = self.skipped_table.currentRow()
-        if row < 0:
-            return None
-        values: dict[str, str] = {}
-        for column in range(self.skipped_table.columnCount()):
-            header = self.skipped_table.horizontalHeaderItem(column)
-            item = self.skipped_table.item(row, column)
-            if header and item:
-                values[header.text()] = item.text().strip()
-        transaction_id = values.get("Mã giao dịch", "")
-        subscriber_id = values.get("Mã thuê bao", "")
-        if not transaction_id:
-            QMessageBox.warning(
-                self, "Thiếu thông tin phiếu",
-                "Phiếu cần có Mã giao dịch để chỉ định an toàn.",
+        tickets = self._selected_skipped_tickets()
+        return tickets[0] if tickets else None
+
+    def _selected_skipped_tickets(self) -> list[tuple[str, str]]:
+        rows = sorted({index.row() for index in self.skipped_table.selectionModel().selectedRows()})
+        if not rows and self.skipped_table.currentRow() >= 0:
+            rows = [self.skipped_table.currentRow()]
+        if not rows:
+            return []
+        headers = {
+            self.skipped_table.horizontalHeaderItem(column).text(): column
+            for column in range(self.skipped_table.columnCount())
+            if self.skipped_table.horizontalHeaderItem(column)
+        }
+        tickets: list[tuple[str, str]] = []
+        for row in rows:
+            transaction_column = headers.get("Mã giao dịch")
+            subscriber_column = headers.get("Mã thuê bao")
+            transaction_item = (
+                self.skipped_table.item(row, transaction_column)
+                if transaction_column is not None else None
             )
-            return None
-        return transaction_id, subscriber_id
+            subscriber_item = (
+                self.skipped_table.item(row, subscriber_column)
+                if subscriber_column is not None else None
+            )
+            transaction_id = transaction_item.text().strip() if transaction_item else ""
+            subscriber_id = subscriber_item.text().strip() if subscriber_item else ""
+            if not transaction_id:
+                QMessageBox.warning(
+                    self, "Thiếu thông tin phiếu",
+                    f"Dòng {row + 1} không có Mã giao dịch nên không thể chỉ định an toàn.",
+                )
+                return []
+            tickets.append((transaction_id, subscriber_id))
+        return list(dict.fromkeys(tickets))
 
     def _assign_selected_skipped(self) -> None:
         if not self.database_path:
             return
-        ticket = self._selected_skipped_ticket()
+        tickets = self._selected_skipped_tickets()
         assignee = self.skipped_assignee_combo.currentText().strip()
-        if not ticket or not assignee:
+        if not tickets or not assignee:
             return
+        preview = "\n".join(
+            f"• {transaction_id} / {subscriber_id or '—'}"
+            for transaction_id, subscriber_id in tickets[:8]
+        )
+        if len(tickets) > 8:
+            preview += f"\n… và {len(tickets) - 8} phiếu khác"
         answer = QMessageBox.question(
             self, "Xác nhận chỉ định người nhận",
-            f"Chỉ định phiếu {ticket[0]} / {ticket[1]} cho {assignee}?\n\n"
+            f"Chỉ định {len(tickets)} phiếu đang chọn cho {assignee}?\n{preview}\n\n"
             "Phiếu sẽ được ưu tiên giao cho nhân sự này ở lượt xử lý tiếp theo, "
             "kể cả khi trái với quy tắc phân nhóm.",
             QMessageBox.Yes | QMessageBox.Cancel,
@@ -1637,14 +1663,14 @@ class ATSOneBSSWindow(QMainWindow):
         if answer != QMessageBox.Yes:
             return
         try:
-            Ledger(self.database_path, initialize=False).set_manual_override(
-                ticket[0], ticket[1], assignee
+            Ledger(self.database_path, initialize=False).set_manual_overrides(
+                tickets, assignee
             )
         except Exception as error:
             QMessageBox.warning(self, "Không lưu được chỉ định", str(error))
             return
         self._append_log(
-            f"Đã chỉ định riêng phiếu {ticket[0]} / {ticket[1]} cho {assignee}; "
+            f"Đã chỉ định riêng {len(tickets)} phiếu cho {assignee}; "
             "sẽ áp dụng ở lượt xử lý tiếp theo."
         )
         self._refresh_skipped_csv(force=True)

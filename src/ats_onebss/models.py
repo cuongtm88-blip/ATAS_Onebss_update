@@ -98,6 +98,7 @@ class Assignment:
     cohort_key: str = ""
     send_to_api: bool = True
     manual_override: bool = False
+    count_status: str = ""
 
     @property
     def points_per_person(self) -> Decimal:

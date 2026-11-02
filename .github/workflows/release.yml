@@ -81,6 +81,9 @@ jobs:
               calendar_sync = archive.extract("ats_onebss.calendar_sync")
               cli = archive.extract("ats_onebss.cli")
               config_module = archive.extract("ats_onebss.config")
+              region_module = archive.extract("ats_onebss.ticket_region")
+              rules_module = archive.extract("ats_onebss.rules")
+              ledger_module = archive.extract("ats_onebss.ledger")
               collect_names = (
                   set(collect_plan.co_varnames)
                   | set(collect_plan.co_cellvars)
@@ -111,6 +114,12 @@ jobs:
               worker_command = find_code(gui, "worker_command")
               gui_load_region = find_code(gui, "_load_region")
               load_config = find_code(config_module, "load_config")
+              sheet_count_status = find_code(region_module, "sheet_count_status")
+              load_project_rules = find_code(rules_module, "load_project_rules")
+              append_assignments = find_code(browser, "append")
+              bulk_override = find_code(ledger_module, "set_manual_overrides")
+              selected_skipped = find_code(gui, "_selected_skipped_tickets")
+              assign_skipped = find_code(gui, "_assign_selected_skipped")
               assert process_available and any(
                   isinstance(value, str) and value.startswith("Bắt đầu đọc lô ")
                   for value in process_available.co_consts
@@ -126,8 +135,17 @@ jobs:
               assert main and "allow_outside_working_hours" in main.co_names
               assert worker_command and "--allow-outside-working-hours" in worker_command.co_consts
               assert gui_load_region and "allow_outside_working_hours" in gui_load_region.co_names
+              assert sheet_count_status and "Chưa xác định" in sheet_count_status.co_consts
+              assert load_project_rules and 1.2 in load_project_rules.co_consts
+              assert append_assignments and "count_status" in repr(append_assignments.co_consts)
+              assert load_config and "count_status" in load_config.co_consts
+              assert bulk_override and "executemany" in bulk_override.co_names
+              assert selected_skipped and "Mã giao dịch" in selected_skipped.co_consts
+              assert assign_skipped and "set_manual_overrides" in assign_skipped.co_names
               print("Verified packaged VIP-skip handling.")
               print("Verified packaged attendance percentage and monthly filter.")
+              print("Verified packaged region classification and project multiplier.")
+              print("Verified packaged count-status sheet field and bulk skipped-ticket assignment.")
               print("Verified packaged North queue window threshold and size.")
               print("Verified packaged outside-hours toggle and worker option.")
           PY
@@ -151,3 +169,5 @@ jobs:
             - Bản tiêu chuẩn dành riêng cho Miền Bắc, phát triển từ mã nguồn ATS OneBSS 0.9.41.
             - Chỉ đóng gói cấu hình, quy tắc và workbook Miền Bắc.
             - Gói ứng dụng chỉ dành cho macOS Apple Silicon.
+            - Phân loại tỉnh từ Địa chỉ lắp đặt, dự phòng Tỉnh LĐ; đánh dấu Không tính cho phiếu ngoài Miền Bắc.
+            - Áp dụng hệ số điểm dự án 1,2; đồng bộ công thức ngày/tháng và hỗ trợ chỉ định nhiều phiếu chưa giao.

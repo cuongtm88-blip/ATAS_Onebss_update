@@ -60,7 +60,7 @@ def load_config(path: str | Path) -> Config:
     configured_sheet_columns = list(sheet.get("columns", [
         "transaction_id", "subscriber_id", "service", "assignee",
         "subscriber_name", "contract_type", "labor_address",
-        "labor_province", "project_name", "reassignment",
+        "labor_province", "project_name", "reassignment", "count_status",
     ]))
     # Older Application Support configs are user-owned and are not overwritten
     # by app updates. Add the K-column field at load time without resetting the
@@ -72,6 +72,11 @@ def load_config(path: str | Path) -> Config:
             else len(configured_sheet_columns)
         )
         configured_sheet_columns.insert(insert_at, "reassignment")
+    # Column L is user-owned status metadata. Older installed configs are
+    # migrated in memory, preserving every other setting and column order.
+    if "count_status" not in configured_sheet_columns:
+        insert_at = configured_sheet_columns.index("reassignment") + 1
+        configured_sheet_columns.insert(insert_at, "count_status")
     sheet_columns = tuple(configured_sheet_columns)
     required_sheet_columns = (
         "transaction_id", "subscriber_id", "service", "assignee",

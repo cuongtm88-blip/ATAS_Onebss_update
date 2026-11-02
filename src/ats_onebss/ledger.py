@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from .models import Assignment, Ticket
+from .ticket_region import sheet_count_status
 from .text import assignment_cohort_key, normalize, ticket_identity
 
 
@@ -389,7 +390,14 @@ class Ledger:
     def set_manual_override(
         self, transaction_id: str, subscriber_id: str, assignee: str
     ) -> None:
-        ticket_key = f"{transaction_id}|{subscriber_id}"
+        self.set_manual_overrides([(transaction_id, subscriber_id)], assignee)
+
+    def set_manual_overrides(
+        self, tickets: list[tuple[str, str]], assignee: str
+    ) -> None:
+        if not tickets:
+            return
+        now = datetime.now(timezone.utc).isoformat()
         with self.connect() as db:
             db.execute(
                 """CREATE TABLE IF NOT EXISTS manual_ticket_overrides (
@@ -400,16 +408,17 @@ class Ledger:
                     created_at TEXT NOT NULL
                 )"""
             )
-            db.execute(
+            db.executemany(
                 """INSERT INTO manual_ticket_overrides
                    (ticket_key, transaction_id, subscriber_id, assignee, created_at)
                    VALUES (?, ?, ?, ?, ?)
                    ON CONFLICT(ticket_key) DO UPDATE SET
                      assignee=excluded.assignee, created_at=excluded.created_at""",
-                (
-                    ticket_key, transaction_id, subscriber_id, assignee,
-                    datetime.now(timezone.utc).isoformat(),
-                ),
+                [
+                    (f"{transaction_id}|{subscriber_id}", transaction_id,
+                     subscriber_id, assignee, now)
+                    for transaction_id, subscriber_id in tickets
+                ],
             )
 
     def manual_overrides(self) -> dict[str, str]:
@@ -460,7 +469,12 @@ class Ledger:
             "contract_type", "labor_address", "labor_province", "project_name",
             "reassignment",
         ]
-        return [dict(zip(keys, row, strict=True)) for row in rows]
+        records = [dict(zip(keys, row, strict=True)) for row in rows]
+        for record in records:
+            record["count_status"] = sheet_count_status(
+                record["labor_address"], record["labor_province"]
+            )
+        return records
 
     def mark_sheet_keys(self, ticket_keys: set[str]) -> None:
         if not ticket_keys:

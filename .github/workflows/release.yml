@@ -76,6 +76,7 @@ jobs:
               attendance_ui = archive.extract("ats_onebss.attendance_ui")
               calendar_sync = archive.extract("ats_onebss.calendar_sync")
               cli = archive.extract("ats_onebss.cli")
+              config_module = archive.extract("ats_onebss.config")
               collect_names = (
                   set(collect_plan.co_varnames)
                   | set(collect_plan.co_cellvars)
@@ -98,8 +99,21 @@ jobs:
               assert calendar_writer and "L1" in calendar_writer.co_consts
               assert "export_rows" in calendar_writer.co_names
               assert find_code(cli, "sync_attendance_calendar")
+              process_available = find_code(cli, "process_available")
+              queue_window = find_code(cli, "_queue_read_window_size")
+              load_config = find_code(config_module, "load_config")
+              assert process_available and "Bắt đầu đọc lô" in process_available.co_consts
+              assert queue_window and "read_batch_size" in queue_window.co_consts
+              assert load_config and {
+                  "1giulYOsX2gjqmgrLqk9fyiOePNhMe-lJ6IIm8cBDBZI",
+                  "read_batch_size",
+                  "read_batch_threshold",
+                  20,
+                  50,
+              } <= set(load_config.co_consts)
               print("Verified packaged VIP-skip handling.")
               print("Verified packaged attendance percentage and monthly filter.")
+              print("Verified packaged North queue window threshold and size.")
           PY
       - uses: actions/upload-artifact@v4
         with:

@@ -233,6 +233,97 @@ def test_unique_tickets_keeps_only_one_visible_duplicate_per_cycle():
     ]
 
 
+def test_large_queue_read_window_starts_only_above_threshold():
+    config = SimpleNamespace(read_batch_size=20, read_batch_threshold=50)
+    tickets = [Ticket(f"GD{i}", f"TB{i}", "Fiber") for i in range(51)]
+
+    assert cli._queue_read_window_size(config, tickets[:50]) is None
+    assert cli._queue_read_window_size(config, tickets) == 20
+
+
+def test_read_windows_without_threshold_remain_always_enabled():
+    config = SimpleNamespace(read_batch_size=20, read_batch_threshold=None)
+
+    assert cli._queue_read_window_size(config, []) == 20
+
+
+@pytest.mark.parametrize(
+    ("queue_size", "expected_plan_sizes", "expected_assign_sizes"),
+    [
+        (50, [50, 30, 10, 0], [20, 20, 10]),
+        (51, [20, 20, 11], [20, 20, 11]),
+    ],
+)
+def test_process_available_uses_twenty_ticket_read_windows_only_above_fifty(
+    monkeypatch, tmp_path, queue_size, expected_plan_sizes, expected_assign_sizes,
+):
+    tickets = [Ticket(f"GD{i}", f"TB{i}", "Fiber") for i in range(queue_size)]
+    plan_sizes = []
+    assign_sizes = []
+
+    class OneBSS:
+        def __init__(self):
+            self.tickets = list(tickets)
+
+        async def visible_tickets(self, *, refresh):
+            assert refresh is False
+            return list(self.tickets)
+
+        async def refresh_tickets(self):
+            pass
+
+        async def assign(self, assignments):
+            assign_sizes.append(len(assignments))
+            keys = {item.ticket.key for item in assignments}
+            self.tickets = [ticket for ticket in self.tickets if ticket.key not in keys]
+
+    class Ledger:
+        def stage(self, assignment):
+            return assignment
+
+        def mark(self, *_args):
+            pass
+
+        def manual_overrides(self):
+            return {}
+
+    async def fake_collect_plan(
+        _config, client, _ledger, *, completed_keys, ticket_snapshot=None,
+        visible_snapshot=None, **_kwargs,
+    ):
+        selected = (
+            ticket_snapshot if ticket_snapshot is not None
+            else await client.visible_tickets(refresh=False)
+        )
+        visible = visible_snapshot if visible_snapshot is not None else selected
+        plan_sizes.append(len(selected))
+        assignments = [
+            cli.Assignment(ticket, ("Người A",), Decimal(1), 1)
+            for ticket in selected if ticket.key not in completed_keys
+        ]
+        return assignments, [], cli._ticket_counts(visible)
+
+    monkeypatch.setattr(cli, "collect_plan", fake_collect_plan)
+    monkeypatch.setattr(cli, "attendance_adjusted_config", lambda value: value)
+    monkeypatch.setattr(cli, "sync_pending", AsyncMock())
+    config = SimpleNamespace(
+        excluded_members=(), attendance_calendar_file=None,
+        read_batch_size=20, read_batch_threshold=50, batch_size=20,
+        preview_csv=tmp_path / "preview_assignments.csv", error_retry_seconds=1,
+    )
+    onebss = OneBSS()
+    dashboard = SimpleNamespace(enabled=False)
+
+    completed, skipped = asyncio.run(cli.process_available(
+        config, onebss, object(), Ledger(), dashboard, set(), {}, {},
+    ))
+
+    assert completed == queue_size
+    assert skipped == 0
+    assert plan_sizes == expected_plan_sizes
+    assert assign_sizes == expected_assign_sizes
+
+
 def test_api_outbox_uses_mapped_service_instead_of_unstable_rule_row(monkeypatch):
     sent = []
     marked = []

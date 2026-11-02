@@ -209,6 +209,8 @@ async def collect_plan(
     completed_keys: set[str] | None = None,
     sheet_assignees: dict[str, tuple[str, ...]] | None = None,
     balance_scores: dict | None = None,
+    ticket_snapshot: list[Ticket] | None = None,
+    visible_snapshot: list[Ticket] | None = None,
 ) -> tuple[list[Assignment], list[tuple[object, str]], dict[str, int]]:
     rules = load_rules(config.rules_file)
     project_rules = load_project_rules(config.project_rules_file)
@@ -217,8 +219,14 @@ async def collect_plan(
         for name in getattr(config, "excluded_members", ())
     )
     excluded = {normalize(name) for name in excluded_members}
-    tickets = await client.visible_tickets(refresh=refresh)
-    visible_counts = _ticket_counts(tickets)
+    tickets = (
+        ticket_snapshot
+        if ticket_snapshot is not None
+        else await client.visible_tickets(refresh=refresh)
+    )
+    visible_counts = _ticket_counts(
+        visible_snapshot if visible_snapshot is not None else tickets
+    )
     # OneBSS can show multiple identical rows. Selecting them by the same
     # transaction/subscriber locator makes Syncfusion select a different count
     # than the planned batch. Process one occurrence per refresh; if OneBSS
@@ -638,6 +646,17 @@ async def load_sheet_source(
     return assignees, ledger.scores(now.year, now.month)
 
 
+def _queue_read_window_size(config: Config, tickets: list[Ticket]) -> int | None:
+    """Return a read-window size only when the queue passes its threshold."""
+    size = getattr(config, "read_batch_size", None)
+    threshold = getattr(config, "read_batch_threshold", None)
+    if size is None:
+        return None
+    if threshold is not None and len(_unique_tickets(tickets)) <= threshold:
+        return None
+    return size
+
+
 async def process_available(
     config: Config,
     onebss: OneBSSClient,
@@ -662,6 +681,16 @@ async def process_available(
             print(f"Ngoài giờ làm việc Miền Bắc ({now:%H:%M}); không giao phiếu trong thời gian này.")
             return 0, 0
     completed = 0
+    snapshot = (
+        await onebss.visible_tickets(refresh=False)
+        if getattr(config, "read_batch_size", None) is not None
+        else None
+    )
+    read_size = _queue_read_window_size(config, snapshot or [])
+    window_keys: set[str] = set()
+    already_read: set[str] = set()
+    skipped_all: list[tuple[object, str]] = []
+    window_number = 0
     while True:
         if config.attendance_calendar_file is not None:
             calendar = load_calendar(config.attendance_calendar_file)
@@ -677,10 +706,43 @@ async def process_available(
                 cycle_config,
                 excluded_members=tuple(dict.fromkeys((*base_excluded, *current_leave))),
             )
+        window_tickets = None
+        if read_size is not None:
+            assert snapshot is not None
+            present_keys = {ticket.key for ticket in snapshot}
+            window_keys.intersection_update(present_keys)
+            if not window_keys:
+                candidates = [
+                    ticket for ticket in _unique_tickets(snapshot)
+                    if ticket.key not in already_read
+                ][:read_size]
+                if not candidates:
+                    write_skipped(
+                        config.preview_csv.with_name("preview_skipped.csv"),
+                        skipped_all,
+                    )
+                    return completed, len(skipped_all)
+                window_keys = {ticket.key for ticket in candidates}
+                already_read.update(window_keys)
+                window_number += 1
+                print(
+                    f"Bắt đầu đọc lô {window_number}: "
+                    f"{len(candidates)} phiếu (tối đa {read_size})."
+                )
+            window_tickets = [
+                ticket for ticket in _unique_tickets(snapshot)
+                if ticket.key in window_keys
+            ]
+        elif snapshot is not None:
+            # For queues at or below the threshold, keep the existing full
+            # planning path while reusing the snapshot used to count the queue.
+            window_tickets = snapshot
         assignments, skipped, visible_counts = await collect_plan(
             config, onebss, ledger, refresh=False, completed_keys=processed,
             sheet_assignees=sheet_assignees,
             balance_scores=balance_scores,
+            ticket_snapshot=window_tickets,
+            visible_snapshot=snapshot,
         )
         # Permit a new occurrence only after the ticket disappeared from a
         # refreshed snapshot. A still-visible row is not assigned repeatedly.
@@ -700,7 +762,15 @@ async def process_available(
                 config = replace(cycle_config, excluded_members=live_excluded)
                 continue
         write_preview(config.preview_csv, assignments)
-        write_skipped(config.preview_csv.with_name("preview_skipped.csv"), skipped)
+        if read_size is None:
+            write_skipped(config.preview_csv.with_name("preview_skipped.csv"), skipped)
+        elif skipped:
+            skipped_all.extend(skipped)
+            window_keys.difference_update(ticket.key for ticket, _reason in skipped)
+            write_skipped(
+                config.preview_csv.with_name("preview_skipped.csv"),
+                skipped_all,
+            )
         if not assignments:
             blocked = processed.intersection(visible_counts)
             if blocked:
@@ -711,10 +781,21 @@ async def process_available(
                 )
                 await asyncio.sleep(config.error_retry_seconds)
                 await onebss.refresh_tickets()
+                if snapshot is not None:
+                    snapshot = await onebss.visible_tickets(refresh=False)
                 # Business rule: every row that is still returned as Chưa giao
                 # is a new actionable occurrence, even if its identifiers were
                 # assigned earlier (for example, a returned ticket).
                 processed.difference_update(blocked)
+                continue
+            if read_size is not None:
+                # Ineligible tickets remain visible; move on to the next
+                # unexamined window rather than restarting the same queue.
+                window_keys.clear()
+                write_skipped(
+                    config.preview_csv.with_name("preview_skipped.csv"),
+                    skipped_all,
+                )
                 continue
             return completed, len(skipped)
         assignees = assignments[0].assignees
@@ -768,6 +849,8 @@ async def process_available(
         print("Cập nhật lại danh sách phiếu chưa giao...")
         await onebss.refresh_tickets()
         remaining = await onebss.visible_tickets(refresh=False)
+        if snapshot is not None:
+            snapshot = remaining
         _release_completed_occurrences(
             processed, before_counts, _ticket_counts(remaining)
         )

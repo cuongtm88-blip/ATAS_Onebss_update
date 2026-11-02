@@ -18,6 +18,8 @@ class Config:
     browser_channel: str
     task: str
     batch_size: int
+    read_batch_size: int | None
+    read_batch_threshold: int | None
     attendance_calendar_file: Path | None
     attendance_sheet_name: str
     timeout_ms: int
@@ -102,6 +104,14 @@ def load_config(path: str | Path) -> Config:
         return match.resolve()
     project_rules_value = rules.get("projects_file", "project_rules.toml")
     attendance = data.get("attendance", {})
+    read_batch_size = onebss.get("read_batch_size")
+    read_batch_threshold = onebss.get("read_batch_threshold")
+    if read_batch_size is None and "1giulYOsX2gjqmgrLqk9fyiOePNhMe-lJ6IIm8cBDBZI" in sheet["url"]:
+        # Existing Miền Bắc installs keep their Application Support config
+        # between updates; supply the new behavior without replacing user data.
+        read_batch_size = onebss.get("batch_size", 20)
+        if read_batch_threshold is None:
+            read_batch_threshold = 50
     return Config(
         root=root,
         onebss_url=onebss["url"],
@@ -110,6 +120,13 @@ def load_config(path: str | Path) -> Config:
         browser_channel=onebss.get("browser_channel", "chrome"),
         task=onebss.get("task", "Kiểm tra và xử lý"),
         batch_size=int(onebss.get("batch_size", 20)),
+        read_batch_size=(
+            max(1, int(read_batch_size)) if read_batch_size is not None else None
+        ),
+        read_batch_threshold=(
+            max(0, int(read_batch_threshold))
+            if read_batch_threshold is not None else None
+        ),
         attendance_calendar_file=resolve(
             str(attendance.get("file", "attendance_calendar.json"))
         ),

@@ -20,7 +20,7 @@ from .attendance import (
     monthly_availability_ratios,
     working_dates,
 )
-from .calendar_sync import sync_calendar
+from .calendar_sync import HEADER as CALENDAR_HEADER, sync_calendar
 from .browser import BrowserSession, GoogleSheetClient, OneBSSClient
 from .config import Config, load_config
 from .credentials import load_credentials
@@ -506,11 +506,11 @@ async def sync_attendance_calendar(config: Config, sheet: GoogleSheetClient) -> 
         return
     sheet_name = config.attendance_sheet_name
     rows = await sheet.export_rows(sheet_name)
-    expected = [
-        "event_id", "operation", "record_type", "record_key", "date",
-        "status", "member", "start_date", "end_date", "session", "updated_at",
-    ]
-    if not rows or rows[0][:11] != expected:
+    legacy_header = CALENDAR_HEADER[:-1]
+    if not rows or rows[0][:len(legacy_header)] != legacy_header or (
+        len(rows[0]) >= len(CALENDAR_HEADER)
+        and rows[0][len(CALENDAR_HEADER) - 1] not in {"", CALENDAR_HEADER[-1]}
+    ):
         raise RuntimeError(
             f"Tab Google Sheet '{sheet_name}' chưa có cấu trúc lịch ATS hợp lệ."
         )

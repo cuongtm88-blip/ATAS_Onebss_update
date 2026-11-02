@@ -71,6 +71,11 @@ jobs:
               plan_assignments = find_code(
                   archive.extract("ats_onebss.planner"), "plan_assignments"
               )
+              browser = archive.extract("ats_onebss.browser")
+              attendance = archive.extract("ats_onebss.attendance")
+              attendance_ui = archive.extract("ats_onebss.attendance_ui")
+              calendar_sync = archive.extract("ats_onebss.calendar_sync")
+              cli = archive.extract("ats_onebss.cli")
               collect_names = (
                   set(collect_plan.co_varnames)
                   | set(collect_plan.co_cellvars)
@@ -78,7 +83,23 @@ jobs:
               ) if collect_plan else set()
               assert "planner_skips" in collect_names
               assert plan_assignments and "skipped_reasons" in plan_assignments.co_varnames
+              assert find_code(attendance, "default_leave_deduction_percent")
+              availability = find_code(attendance, "monthly_availability_ratios")
+              validate_calendar = find_code(attendance, "validate_calendar")
+              assert availability and "deduction_percent" in availability.co_consts
+              assert validate_calendar and "deduction_percent" in validate_calendar.co_consts
+              dialog_init = find_code(attendance_ui, "__init__")
+              table_filter = find_code(attendance_ui, "_refresh_leave_table")
+              assert dialog_init and {"leave_month", "leave_year", "leave_deduction"} <= set(dialog_init.co_names)
+              assert table_filter and "_selected_month" in table_filter.co_names
+              sync_state = find_code(calendar_sync, "_cloud_state")
+              assert sync_state and "deduction_percent" in repr(sync_state.co_consts)
+              calendar_writer = find_code(browser, "append_calendar_events")
+              assert calendar_writer and "L1" in calendar_writer.co_consts
+              assert "export_rows" in calendar_writer.co_names
+              assert find_code(cli, "sync_attendance_calendar")
               print("Verified packaged VIP-skip handling.")
+              print("Verified packaged attendance percentage and monthly filter.")
           PY
       - uses: actions/upload-artifact@v4
         with:

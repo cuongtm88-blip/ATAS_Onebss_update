@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from ats_onebss.attendance import (
+    default_leave_deduction_percent,
     is_working_day,
     is_working_session,
     members_on_leave,
@@ -47,6 +48,45 @@ def test_leave_reduces_monthly_target_and_excludes_active_session():
     assert not members_on_leave(
         calendar, datetime.fromisoformat("2026-10-05T14:00:00")
     )
+
+
+def test_default_leave_deduction_is_one_monthly_workday():
+    calendar = validate_calendar({"overrides": [], "leave": []})
+    assert default_leave_deduction_percent(2026, 10, calendar) == (
+        Decimal(100) / Decimal(22)
+    )
+
+
+def test_custom_daily_deduction_percent_adjusts_monthly_target():
+    calendar = validate_calendar({
+        "overrides": [],
+        "leave": [{
+            "member": "Nhân viên A",
+            "start_date": "2026-10-05",
+            "end_date": "2026-10-05",
+            "session": "full",
+            "deduction_percent": "5",
+        }],
+    })
+    assert monthly_availability_ratios(
+        calendar, ["Nhân viên A"], 2026, 10
+    )["Nhân viên A"] == Decimal("0.95")
+
+
+def test_custom_half_day_deduction_is_half_of_daily_percent():
+    calendar = validate_calendar({
+        "overrides": [],
+        "leave": [{
+            "member": "Nhân viên A",
+            "start_date": "2026-10-05",
+            "end_date": "2026-10-05",
+            "session": "afternoon",
+            "deduction_percent": "5",
+        }],
+    })
+    assert monthly_availability_ratios(
+        calendar, ["Nhân viên A"], 2026, 10
+    )["Nhân viên A"] == Decimal("0.975")
 
 
 def test_working_sessions_are_morning_and_afternoon_only():

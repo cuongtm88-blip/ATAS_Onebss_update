@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +56,29 @@ def validate_calendar(data: object) -> dict[str, Any]:
         session = str(item.get("session", ""))
         if session not in LEAVE_SESSIONS:
             raise ValueError(f"Buổi nghỉ của {member} không hợp lệ.")
+        cleaned_item = {
+            "member": member,
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "session": session,
+        }
+        raw_percent = item.get("deduction_percent")
+        if raw_percent not in (None, ""):
+            try:
+                deduction_percent = Decimal(str(raw_percent))
+            except (InvalidOperation, TypeError, ValueError) as error:
+                raise ValueError(
+                    f"Mức trừ/ngày công của {member} không hợp lệ."
+                ) from error
+            if not deduction_percent.is_finite() or not (
+                Decimal(0) <= deduction_percent <= Decimal(100)
+            ):
+                raise ValueError(
+                    f"Mức trừ/ngày công của {member} phải từ 0 đến 100%."
+                )
+            cleaned_item["deduction_percent"] = format(
+                deduction_percent.normalize(), "f"
+            )
         member_key = member.casefold()
         for previous_start, previous_end in intervals.setdefault(member_key, []):
             if start <= previous_end and previous_start <= end:
@@ -63,12 +86,7 @@ def validate_calendar(data: object) -> dict[str, Any]:
                     f"Lịch nghỉ của {member} bị trùng ngày; hãy gộp hoặc sửa các dòng."
                 )
         intervals[member_key].append((start, end))
-        cleaned_leave.append({
-            "member": member,
-            "start_date": start.isoformat(),
-            "end_date": end.isoformat(),
-            "session": session,
-        })
+        cleaned_leave.append(cleaned_item)
     cleaned_overrides.sort(key=lambda item: item["date"])
     cleaned_leave.sort(key=lambda item: (item["start_date"], item["member"].casefold()))
     return {"version": 1, "overrides": cleaned_overrides, "leave": cleaned_leave}
@@ -112,6 +130,16 @@ def working_dates(year: int, month: int, calendar: dict[str, Any]) -> list[date]
     return result
 
 
+def default_leave_deduction_percent(
+    year: int, month: int, calendar: dict[str, Any],
+) -> Decimal:
+    """Return the percentage of a monthly target represented by one workday."""
+    workday_count = len(working_dates(year, month, calendar))
+    if not workday_count:
+        return Decimal(0)
+    return Decimal(100) / Decimal(workday_count)
+
+
 def monthly_availability_ratios(
     calendar: dict[str, Any], member_names: tuple[str, ...] | list[str],
     year: int, month: int,
@@ -129,8 +157,19 @@ def monthly_availability_ratios(
             start = date.fromisoformat(entry["start_date"])
             end = date.fromisoformat(entry["end_date"])
             leave_units = Decimal("0.5") if entry["session"] != "full" else Decimal(1)
-            unavailable += sum(
-                (leave_units for day in day_set if start <= day <= end), Decimal(0)
+            deduction_percent = entry.get("deduction_percent")
+            if deduction_percent is None:
+                deduction_percent = default_leave_deduction_percent(
+                    year, month, calendar,
+                )
+            else:
+                deduction_percent = Decimal(deduction_percent)
+            affected_workdays = sum(
+                1 for day in day_set if start <= day <= end
+            )
+            unavailable += (
+                leave_units * deduction_percent / Decimal(100)
+                * Decimal(len(workdays)) * Decimal(affected_workdays)
             )
         ratios[name] = max(
             Decimal("0.001"),

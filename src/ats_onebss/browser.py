@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 from playwright.async_api import BrowserContext, Locator, Page, async_playwright
 
+from .calendar_sync import HEADER
 from .config import Config
 from .models import Assignment, ProjectRule, ServiceRule, Ticket
 from .rules import RuleError, match_rule, member_score_key
@@ -2488,8 +2489,10 @@ class GoogleSheetClient:
         """Append calendar change events to the dedicated regional tab."""
         if not rows:
             return
-        if any(len(row) != 11 for row in rows):
-            raise RuntimeError("Dòng đồng bộ lịch phải có đúng 11 cột.")
+        if any(len(row) != len(HEADER) for row in rows):
+            raise RuntimeError(
+                f"Dòng đồng bộ lịch phải có đúng {len(HEADER)} cột."
+            )
         page = self.page or await self.open()
         await self.activate_sheet(sheet_name)
         written_ids = {row[0] for row in rows}
@@ -2498,6 +2501,36 @@ class GoogleSheetClient:
 
         for attempt in range(1, 4):
             existing = await self.export_rows(sheet_name)
+            if not existing:
+                raise RuntimeError(
+                    f"Tab Google Sheet '{sheet_name}' chưa có hàng tiêu đề lịch."
+                )
+            legacy_header = HEADER[:-1]
+            if existing[0][:len(legacy_header)] == legacy_header and (
+                len(existing[0]) < len(HEADER) or not existing[0][len(HEADER) - 1]
+            ):
+                await name_box.fill("L1")
+                await name_box.press("Enter")
+                await page.evaluate(
+                    "text => navigator.clipboard.writeText(text)", HEADER[-1]
+                )
+                await page.keyboard.press(
+                    "Control+V" if os.name == "nt" else "Meta+V"
+                )
+                deadline = asyncio.get_running_loop().time() + 10
+                while asyncio.get_running_loop().time() < deadline:
+                    await asyncio.sleep(1)
+                    existing = await self.export_rows(sheet_name)
+                    if existing and existing[0][:len(HEADER)] == HEADER:
+                        break
+                else:
+                    raise RuntimeError(
+                        f"Không thể thêm cột '{HEADER[-1]}' vào tab lịch."
+                    )
+            if existing[0][:len(HEADER)] != HEADER:
+                raise RuntimeError(
+                    f"Tab Google Sheet '{sheet_name}' có hàng tiêu đề lịch không hợp lệ."
+                )
             visible_ids = {
                 row[0] for row in existing if row and row[0] in written_ids
             }

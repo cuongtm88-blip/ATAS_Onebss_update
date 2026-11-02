@@ -42,6 +42,8 @@ jobs:
           codesign --verify --deep --strict "$extracted"
           test -f "$extracted/Contents/Frameworks/assignment_rules.xlsx"
           test -f "$extracted/Contents/Frameworks/project_rules.toml"
+          grep -q '^read_batch_size = 20$' "$extracted/Contents/Frameworks/config.toml"
+          grep -q '^read_batch_threshold = 50$' "$extracted/Contents/Frameworks/config.toml"
           grep -q 'Cục Tin Học Và Thống Kê Tài Chính' "$extracted/Contents/Frameworks/project_rules.toml"
           uv run python -c 'from ats_onebss.rules import load_rules; from pathlib import Path; import sys; rules=load_rules(Path(sys.argv[1])); assert len(rules) == 67; print(f"Verified packaged rules: {len(rules)}")' "$extracted/Contents/Frameworks/assignment_rules.xlsx"
           uv run python - "$extracted" <<'PY'
@@ -111,8 +113,6 @@ jobs:
                   "1giulYOsX2gjqmgrLqk9fyiOePNhMe-lJ6IIm8cBDBZI",
                   "read_batch_size",
                   "read_batch_threshold",
-                  20,
-                  50,
               } <= set(load_config.co_consts)
               print("Verified packaged VIP-skip handling.")
               print("Verified packaged attendance percentage and monthly filter.")

@@ -26,6 +26,27 @@ def test_parser_accepts_poll_interval_override():
     assert args.poll_interval_minutes == 7
 
 
+def test_parser_accepts_outside_working_hours_override():
+    args = cli.parser().parse_args([
+        "--allow-outside-working-hours", "run", "--yes",
+    ])
+    assert args.allow_outside_working_hours is True
+
+
+def test_outside_working_hours_override_bypasses_weekends_and_sessions():
+    calendar = {"overrides": []}
+    config = SimpleNamespace(allow_outside_working_hours=False)
+    after_hours = cli.datetime(2026, 11, 2, 19, 0)
+    weekend = cli.datetime(2026, 11, 7, 10, 0)
+
+    assert cli._working_time_block_reason(config, calendar, after_hours)
+    assert cli._working_time_block_reason(config, calendar, weekend)
+
+    config.allow_outside_working_hours = True
+    assert cli._working_time_block_reason(config, calendar, after_hours) is None
+    assert cli._working_time_block_reason(config, calendar, weekend) is None
+
+
 def test_collect_plan_routes_voice_xu_ly_away_from_old_supervision_owner(
     monkeypatch,
 ):

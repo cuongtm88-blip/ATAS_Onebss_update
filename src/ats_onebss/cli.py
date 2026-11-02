@@ -657,6 +657,25 @@ def _queue_read_window_size(config: Config, tickets: list[Ticket]) -> int | None
     return size
 
 
+def _working_time_block_reason(
+    config: Config, calendar: dict, now: datetime
+) -> str | None:
+    """Return why ticket assignment is blocked by the attendance schedule."""
+    if getattr(config, "allow_outside_working_hours", False):
+        return None
+    if not is_working_day(now.date(), calendar):
+        return (
+            f"Hôm nay {now:%d/%m/%Y} là ngày nghỉ theo lịch Miền Bắc; "
+            "không giao phiếu."
+        )
+    if not is_working_session(now):
+        return (
+            f"Ngoài giờ làm việc Miền Bắc ({now:%H:%M}); "
+            "không giao phiếu trong thời gian này."
+        )
+    return None
+
+
 async def process_available(
     config: Config,
     onebss: OneBSSClient,
@@ -674,11 +693,9 @@ async def process_available(
     if config.attendance_calendar_file is not None:
         calendar = load_calendar(config.attendance_calendar_file)
         now = datetime.now(ZoneInfo(config.timezone))
-        if not is_working_day(now.date(), calendar):
-            print(f"Hôm nay {now:%d/%m/%Y} là ngày nghỉ theo lịch Miền Bắc; không giao phiếu.")
-            return 0, 0
-        if not is_working_session(now):
-            print(f"Ngoài giờ làm việc Miền Bắc ({now:%H:%M}); không giao phiếu trong thời gian này.")
+        block_reason = _working_time_block_reason(config, calendar, now)
+        if block_reason:
+            print(block_reason)
             return 0, 0
     completed = 0
     snapshot = (
@@ -695,11 +712,9 @@ async def process_available(
         if config.attendance_calendar_file is not None:
             calendar = load_calendar(config.attendance_calendar_file)
             now = datetime.now(ZoneInfo(config.timezone))
-            if not is_working_day(now.date(), calendar):
-                print(f"Hôm nay {now:%d/%m/%Y} là ngày nghỉ theo lịch Miền Bắc; không giao phiếu.")
-                return completed, 0
-            if not is_working_session(now):
-                print(f"Ngoài giờ làm việc Miền Bắc ({now:%H:%M}); không giao phiếu.")
+            block_reason = _working_time_block_reason(config, calendar, now)
+            if block_reason:
+                print(block_reason)
                 return completed, 0
             current_leave = members_on_leave(calendar, now)
             config = replace(
@@ -750,7 +765,8 @@ async def process_available(
         if config.attendance_calendar_file is not None:
             calendar = load_calendar(config.attendance_calendar_file)
             now = datetime.now(ZoneInfo(config.timezone))
-            if not is_working_day(now.date(), calendar) or not is_working_session(now):
+            block_reason = _working_time_block_reason(config, calendar, now)
+            if block_reason:
                 print(
                     f"Đã đến ngoài giờ làm việc ({now:%H:%M}); "
                     "dừng trước khi giao lô tiếp theo."
@@ -1164,6 +1180,8 @@ async def command_watch(config: Config) -> None:
             f"Đang chạy liên tục mỗi {config.poll_interval_minutes} phút. "
             "Nhấn Ctrl+C để dừng."
         )
+        if getattr(config, "allow_outside_working_hours", False):
+            print("Đã bật giao phiếu ngoài giờ và ngày nghỉ theo lịch.")
         next_automatic_cycle = 0.0
         while True:
             await monitor_onebss_session(onebss, telegram, session_state)
@@ -1307,6 +1325,10 @@ def parser() -> argparse.ArgumentParser:
         "--poll-interval-minutes", type=int, metavar="PHÚT",
         help="Ghi đè chu kỳ tự động của config.toml cho lần chạy này",
     )
+    result.add_argument(
+        "--allow-outside-working-hours", action="store_true",
+        help="Cho phép giao phiếu ngoài khung giờ và ngày làm việc",
+    )
     sub = result.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="Tạo config.toml từ file mẫu")
     sub.add_parser("login", help="Mở trình duyệt để đăng nhập lần đầu")
@@ -1359,6 +1381,9 @@ def main() -> None:
         config_path = region.config_path
         print(f"Đang sử dụng cấu hình {region.name}: {config_path}")
     config = load_config(config_path)
+    if args.allow_outside_working_hours:
+        config = replace(config, allow_outside_working_hours=True)
+        print("Đã bật giao phiếu ngoài giờ làm việc và ngày nghỉ theo lịch.")
     if args.poll_interval_minutes is not None:
         if args.poll_interval_minutes < 1:
             parser().error("--poll-interval-minutes phải lớn hơn hoặc bằng 1")

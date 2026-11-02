@@ -413,6 +413,7 @@ def worker_command(
     command: str,
     excluded: tuple[str, ...],
     poll_interval_minutes: int | None = None,
+    allow_outside_working_hours: bool = False,
 ) -> list[str]:
     if getattr(sys, "frozen", False):
         result = [sys.executable, "--worker"]
@@ -421,6 +422,8 @@ def worker_command(
     result.extend(["--config", str(config_path)])
     if poll_interval_minutes is not None:
         result.extend(["--poll-interval-minutes", str(poll_interval_minutes)])
+    if allow_outside_working_hours:
+        result.append("--allow-outside-working-hours")
     result.append(command)
     if command in {"run", "watch", "once", "sync", "calendar-sync"}:
         result.append("--yes")
@@ -687,6 +690,12 @@ class ATSOneBSSWindow(QMainWindow):
         self.keep_awake = QCheckBox("Giữ máy không Sleep khi đang chạy")
         self.keep_awake.setChecked(True)
         buttons.addWidget(self.keep_awake)
+        self.allow_outside_working_hours = QCheckBox("Giao phiếu ngoài giờ")
+        self.allow_outside_working_hours.setToolTip(
+            "Khi bật, app vẫn giao ngoài khung 08:00–12:00, 13:00–17:00, "
+            "cuối tuần và ngày nghỉ theo lịch. Lịch nghỉ nhân sự vẫn được áp dụng."
+        )
+        buttons.addWidget(self.allow_outside_working_hours)
         control_layout.addLayout(buttons)
         page.addWidget(control_card)
 
@@ -892,6 +901,9 @@ class ATSOneBSSWindow(QMainWindow):
         self.stop_button.clicked.connect(self._stop)
         self.member_list.itemSelectionChanged.connect(self._save_settings)
         self.cycle_minutes.valueChanged.connect(lambda _value: self._save_settings())
+        self.allow_outside_working_hours.toggled.connect(
+            lambda _checked: self._save_settings()
+        )
         self.update_rules_button.clicked.connect(self._update_rules_file)
         self.update_version_button.clicked.connect(self._check_version_update)
         self.copy_log_button.clicked.connect(self._copy_log)
@@ -933,6 +945,9 @@ class ATSOneBSSWindow(QMainWindow):
             ] = list(self._selected_exclusions())
             self.settings["regions"][region.key]["poll_interval_minutes"] = (
                 self.cycle_minutes.value()
+            )
+            self.settings["regions"][region.key]["allow_outside_working_hours"] = (
+                self.allow_outside_working_hours.isChecked()
             )
             self.settings["last_region"] = region.key
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1023,6 +1038,14 @@ class ATSOneBSSWindow(QMainWindow):
         self.attendance_calendar_path = None
         self.attendance_calendar_button.setVisible(False)
         default_interval = 15
+        saved_outside_hours = (
+            self.settings.get("regions", {})
+            .get(region.key, {})
+            .get("allow_outside_working_hours", False)
+        )
+        self.allow_outside_working_hours.blockSignals(True)
+        self.allow_outside_working_hours.setChecked(bool(saved_outside_hours))
+        self.allow_outside_working_hours.blockSignals(False)
         if region.enabled:
             try:
                 self.member_names = region_member_names(region)
@@ -1342,6 +1365,7 @@ class ATSOneBSSWindow(QMainWindow):
             mode,
             self._selected_exclusions(),
             self.cycle_minutes.value() if mode in {"run", "watch"} else None,
+            self.allow_outside_working_hours.isChecked(),
         )
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONUNBUFFERED", "1")
@@ -2000,6 +2024,7 @@ class ATSOneBSSWindow(QMainWindow):
         )
         self.region_combo.setEnabled(idle)
         self.member_list.setEnabled(idle)
+        self.allow_outside_working_hours.setEnabled(enabled_region and idle)
         self.attendance_calendar_button.setEnabled(
             enabled_region and idle and self.attendance_calendar_path is not None
         )

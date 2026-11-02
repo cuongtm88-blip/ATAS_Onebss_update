@@ -37,6 +37,7 @@ class Config:
     timezone: str
     poll_interval_minutes: int
     error_retry_seconds: int
+    allow_outside_working_hours: bool
     dashboard_enabled: bool
     dashboard_url: str
     dashboard_service_key: str
@@ -148,6 +149,7 @@ def load_config(path: str | Path) -> Config:
         timezone=runtime.get("timezone", "Asia/Ho_Chi_Minh"),
         poll_interval_minutes=int(runtime.get("poll_interval_minutes", 15)),
         error_retry_seconds=max(1, int(runtime.get("error_retry_seconds", 3))),
+        allow_outside_working_hours=False,
         dashboard_enabled=bool(dashboard.get("enabled", False)),
         dashboard_url=str(dashboard.get("supabase_url", "")).rstrip("/"),
         dashboard_service_key=os.environ.get(

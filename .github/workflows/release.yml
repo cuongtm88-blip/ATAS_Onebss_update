@@ -34,6 +34,8 @@ jobs:
           zip="dist/ATS-OneBSS-macOS-arm64-${version}.zip"
           actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
           test "$actual" = "$version"
+          bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")"
+          test "$bundle_version" = "$version"
           codesign --verify --deep --strict "$app"
           unzip -t "$zip"
           check_dir="$(mktemp -d)"
@@ -103,6 +105,11 @@ jobs:
               assert find_code(cli, "sync_attendance_calendar")
               process_available = find_code(cli, "process_available")
               queue_window = find_code(cli, "_queue_read_window_size")
+              working_time_block = find_code(cli, "_working_time_block_reason")
+              gui = archive.extract("ats_onebss.gui")
+              main = find_code(cli, "main")
+              worker_command = find_code(gui, "worker_command")
+              gui_load_region = find_code(gui, "_load_region")
               load_config = find_code(config_module, "load_config")
               assert process_available and any(
                   isinstance(value, str) and value.startswith("Bắt đầu đọc lô ")
@@ -114,9 +121,15 @@ jobs:
                   "read_batch_size",
                   "read_batch_threshold",
               } <= set(load_config.co_consts)
+              assert working_time_block and "allow_outside_working_hours" in working_time_block.co_consts
+              assert process_available and "_working_time_block_reason" in process_available.co_names
+              assert main and "allow_outside_working_hours" in main.co_names
+              assert worker_command and "--allow-outside-working-hours" in worker_command.co_consts
+              assert gui_load_region and "allow_outside_working_hours" in gui_load_region.co_names
               print("Verified packaged VIP-skip handling.")
               print("Verified packaged attendance percentage and monthly filter.")
               print("Verified packaged North queue window threshold and size.")
+              print("Verified packaged outside-hours toggle and worker option.")
           PY
       - uses: actions/upload-artifact@v4
         with:

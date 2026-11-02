@@ -43,6 +43,19 @@ def test_worker_command_passes_selected_poll_interval(monkeypatch):
     ]
 
 
+def test_worker_command_passes_outside_working_hours_option(monkeypatch):
+    monkeypatch.setattr(gui.sys, "frozen", False, raising=False)
+
+    command = gui.worker_command(
+        Path("config.toml"), "run", (), 15, allow_outside_working_hours=True
+    )
+
+    assert command[4:10] == [
+        "--config", "config.toml", "--poll-interval-minutes", "15",
+        "--allow-outside-working-hours", "run",
+    ]
+
+
 def test_login_does_not_receive_exclusions(monkeypatch):
     monkeypatch.setattr(gui.sys, "frozen", False, raising=False)
 

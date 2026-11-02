@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QDate
@@ -10,11 +11,13 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -22,7 +25,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .attendance import load_calendar, save_calendar, validate_calendar
+from .attendance import (
+    default_leave_deduction_percent,
+    load_calendar,
+    save_calendar,
+    validate_calendar,
+)
 
 
 class AttendanceCalendarDialog(QDialog):
@@ -77,9 +85,10 @@ class AttendanceCalendarDialog(QDialog):
 
         leave_page = QVBoxLayout()
         leave_help = QLabel(
-            "Nghỉ cả ngày trừ 1 ngày công; nghỉ nửa ngày trừ 0,5 ngày công. "
-            "Ngày cuối tuần/ngày lễ không bị trừ thêm. Buổi nghỉ áp dụng cho "
-            "mọi ngày làm việc trong khoảng đã chọn."
+            "Mức trừ được tính cho mỗi ngày làm việc trong khoảng nghỉ; "
+            "mặc định là 100% chia cho số ngày công của tháng đang chọn. "
+            "Nghỉ nửa ngày tính một nửa mức này. Ngày cuối tuần/ngày lễ không "
+            "bị trừ thêm; buổi nghỉ vẫn áp dụng cho mọi ngày làm việc trong khoảng."
         )
         leave_help.setWordWrap(True)
         leave_page.addWidget(leave_help)
@@ -92,6 +101,11 @@ class AttendanceCalendarDialog(QDialog):
         self.leave_session.addItem("Cả ngày", "full")
         self.leave_session.addItem("Nửa ngày sáng (08:00–12:00)", "morning")
         self.leave_session.addItem("Nửa ngày chiều (13:00–17:00)", "afternoon")
+        self.leave_deduction = QDoubleSpinBox()
+        self.leave_deduction.setRange(0, 100)
+        self.leave_deduction.setDecimals(6)
+        self.leave_deduction.setSingleStep(0.25)
+        self.leave_deduction.setSuffix(" %")
         leave_form = QFormLayout()
         leave_form.addRow("Nhân sự:", self.member_combo)
         date_row = QHBoxLayout()
@@ -103,16 +117,33 @@ class AttendanceCalendarDialog(QDialog):
         date_row.addStretch(1)
         leave_form.addRow("Khoảng nghỉ:", date_row)
         leave_form.addRow("Thời lượng:", self.leave_session)
+        leave_form.addRow("Trừ mỗi ngày công (%):", self.leave_deduction)
         leave_page.addLayout(leave_form)
         add_leave = QPushButton("Thêm lịch nghỉ")
         add_leave.clicked.connect(self._add_leave)
         leave_page.addWidget(add_leave, 0, Qt.AlignLeft)
-        self.leave_table = QTableWidget(0, 4)
+        month_filter = QHBoxLayout()
+        month_filter.addWidget(QLabel("Tháng hiển thị:"))
+        self.leave_month = QComboBox()
+        self.leave_month.addItems(tuple(f"Tháng {month}" for month in range(1, 13)))
+        self.leave_month.setCurrentIndex(date.today().month - 1)
+        self.leave_year = QSpinBox()
+        self.leave_year.setRange(2000, 2100)
+        self.leave_year.setValue(date.today().year)
+        month_filter.addWidget(self.leave_month)
+        month_filter.addWidget(self.leave_year)
+        month_filter.addStretch(1)
+        leave_page.addLayout(month_filter)
+        self.leave_table = QTableWidget(0, 5)
         self.leave_table.setHorizontalHeaderLabels(
-            ["Nhân sự", "Từ ngày", "Đến ngày", "Buổi nghỉ"]
+            ["Nhân sự", "Từ ngày", "Đến ngày", "Buổi nghỉ", "Trừ/ngày công (%)"]
         )
         self._prepare_table(self.leave_table)
         leave_page.addWidget(self.leave_table, 1)
+        self.leave_month.currentIndexChanged.connect(self._refresh_leave_table)
+        self.leave_year.valueChanged.connect(self._refresh_leave_table)
+        self.leave_month.currentIndexChanged.connect(self._update_default_deduction)
+        self.leave_year.valueChanged.connect(self._update_default_deduction)
         remove_leave = QPushButton("Xóa lịch nghỉ đang chọn")
         remove_leave.clicked.connect(
             lambda: self._remove_selected(self.leave_table, "leave")
@@ -128,6 +159,7 @@ class AttendanceCalendarDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
         self._refresh_tables()
+        self._update_default_deduction()
 
     @staticmethod
     def _date_edit() -> QDateEdit:
@@ -161,23 +193,43 @@ class AttendanceCalendarDialog(QDialog):
             self.override_table.insertRow(row)
             self.override_table.setItem(row, 0, QTableWidgetItem(self._display_date(entry["date"])))
             self.override_table.setItem(row, 1, QTableWidgetItem(labels[entry["status"]]))
+        self._refresh_leave_table()
+
+    def _selected_month(self) -> tuple[int, int]:
+        return self.leave_year.value(), self.leave_month.currentIndex() + 1
+
+    def _default_deduction(self) -> Decimal:
+        year, month = self._selected_month()
+        return default_leave_deduction_percent(year, month, self.data)
+
+    def _update_default_deduction(self, *_args) -> None:
+        self.leave_deduction.setValue(float(self._default_deduction()))
+
+    def _refresh_leave_table(self, *_args) -> None:
+        year, month = self._selected_month()
+        first = date(year, month, 1)
+        next_month = date(year + (month == 12), month % 12 + 1, 1)
         sessions = {
-            "full": "Cả ngày",
-            "morning": "Nửa ngày sáng",
+            "full": "Cả ngày", "morning": "Nửa ngày sáng",
             "afternoon": "Nửa ngày chiều",
         }
         self.leave_table.setRowCount(0)
-        for entry in self.data["leave"]:
+        default_percent = self._default_deduction()
+        for entry_index, entry in enumerate(self.data["leave"]):
+            start = date.fromisoformat(entry["start_date"])
+            end = date.fromisoformat(entry["end_date"])
+            if end < first or start >= next_month:
+                continue
             row = self.leave_table.rowCount()
             self.leave_table.insertRow(row)
             values = (
-                entry["member"],
-                self._display_date(entry["start_date"]),
-                self._display_date(entry["end_date"]),
-                sessions[entry["session"]],
+                entry["member"], self._display_date(entry["start_date"]),
+                self._display_date(entry["end_date"]), sessions[entry["session"]],
+                f"{Decimal(entry.get('deduction_percent', default_percent)):.4f}%",
             )
             for column, value in enumerate(values):
                 self.leave_table.setItem(row, column, QTableWidgetItem(value))
+            self.leave_table.item(row, 0).setData(Qt.UserRole, entry_index)
 
     def _add_override(self) -> None:
         day = self._date_value(self.override_date)
@@ -203,6 +255,9 @@ class AttendanceCalendarDialog(QDialog):
             "start_date": start,
             "end_date": end,
             "session": str(self.leave_session.currentData()),
+            "deduction_percent": format(
+                Decimal(str(self.leave_deduction.value())).normalize(), "f"
+            ),
         })
         try:
             self.data = validate_calendar(self.data)
@@ -213,9 +268,17 @@ class AttendanceCalendarDialog(QDialog):
         self._refresh_tables()
 
     def _remove_selected(self, table: QTableWidget, key: str) -> None:
-        rows = sorted({item.row() for item in table.selectedItems()}, reverse=True)
-        for row in rows:
-            del self.data[key][row]
+        selected_rows = {item.row() for item in table.selectedItems()}
+        indices = sorted(
+            {
+                table.item(row, 0).data(Qt.UserRole)
+                if table.item(row, 0).data(Qt.UserRole) is not None else row
+                for row in selected_rows
+            },
+            reverse=True,
+        )
+        for index in indices:
+            del self.data[key][index]
         self._refresh_tables()
 
     def _save(self) -> None:

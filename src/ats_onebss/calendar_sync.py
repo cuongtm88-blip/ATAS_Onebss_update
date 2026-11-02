@@ -12,6 +12,7 @@ from .attendance import load_calendar, save_calendar, validate_calendar
 CALENDAR_COLUMNS = (
     "event_id", "operation", "record_type", "record_key", "date", "status",
     "member", "start_date", "end_date", "session", "updated_at",
+    "deduction_percent",
 )
 HEADER = list(CALENDAR_COLUMNS)
 
@@ -58,7 +59,10 @@ def _cloud_state(rows: Iterable[list[str]]) -> dict[str, tuple[str, dict[str, st
         elif values["operation"] == "put":
             fields = (
                 ("date", "status") if values["record_type"] == "overrides"
-                else ("member", "start_date", "end_date", "session")
+                else (
+                    "member", "start_date", "end_date", "session",
+                    "deduction_percent",
+                )
             )
             state[key] = (
                 values["record_type"],

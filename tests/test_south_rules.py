@@ -6,6 +6,7 @@ from ats_onebss.models import Member, ServiceRule, Ticket
 from ats_onebss.planner import plan_assignments
 from ats_onebss.rules import load_project_rules, load_rules, match_project_rule
 from ats_onebss import gui
+from ats_onebss.gui import install_rules_file
 
 
 ROOT = Path(__file__).parents[1]
@@ -147,3 +148,16 @@ def test_windows_update_refreshes_stale_south_rule_copies_once(tmp_path, monkeyp
     assert (runtime_mn / "project_rules_MN.toml").read_text(encoding="utf-8") == (
         "user edited rule"
     )
+
+
+def test_installing_south_workbook_releases_staging_file(tmp_path):
+    source = ROOT / "MN" / "Giao_phieu_MN.xlsx"
+    target = tmp_path / "MN" / "Giao_phieu_MN.xlsx"
+    target.parent.mkdir()
+    target.write_bytes(source.read_bytes())
+
+    backup = install_rules_file(source, target)
+
+    assert backup is not None and backup.exists()
+    assert len(load_rules(target)) == len(SOUTH_RULES)
+    assert not target.with_name(".Giao_phieu_MN.importing.xlsx").exists()

@@ -382,11 +382,17 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
             str(map_sheet.cell(row, map_condition_column).value or "").strip()
             if map_condition_column else ""
         )
-        if base_condition and map_condition and unaccent(base_condition) != unaccent(map_condition):
+        # Group DV may refine a base rule by adding alternatives to the same
+        # condition (for example additional installation types). Keep the
+        # base condition intact, and reject mappings that weaken or replace it.
+        if (
+            base_condition and map_condition
+            and unaccent(base_condition) not in unaccent(map_condition)
+        ):
             raise RuleError(
                 f"Quy tắc group không khớp tại sheet Group DV, dòng {row}"
             )
-        condition = base_condition or map_condition
+        condition = map_condition or base_condition
         raw_sheet_service = map_sheet.cell(
             row, map_headers["dich vu tren google sheet"]
         ).value
@@ -409,6 +415,13 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
 
 def load_rules(path: str | Path) -> list[ServiceRule]:
     workbook = load_workbook(Path(path), data_only=True, read_only=True)
+    try:
+        return _load_rules_workbook(workbook)
+    finally:
+        workbook.close()
+
+
+def _load_rules_workbook(workbook) -> list[ServiceRule]:
     sheet = workbook[workbook.sheetnames[0]]
     headers = [str(sheet.cell(2, col).value or "").strip() for col in range(1, sheet.max_column + 1)]
     header_columns = {unaccent(header): index + 1 for index, header in enumerate(headers) if header}

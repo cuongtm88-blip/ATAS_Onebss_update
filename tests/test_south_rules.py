@@ -4,7 +4,12 @@ from types import SimpleNamespace
 
 from ats_onebss.models import Member, ServiceRule, Ticket
 from ats_onebss.planner import plan_assignments
-from ats_onebss.rules import load_project_rules, load_rules, match_project_rule
+from ats_onebss.rules import (
+    SOUTH_PROJECT_GROUP_DVS,
+    load_project_rules,
+    load_rules,
+    match_project_rule,
+)
 from ats_onebss import gui
 from ats_onebss.gui import install_rules_file
 
@@ -34,6 +39,41 @@ def test_south_bca_routes_all_requested_locations_and_does_not_match_cap():
         "GD", "TB", "Fiber", customer_name="CAP",
         labor_address="Bình Dương",
     )) is None
+
+
+def test_south_project_rules_only_apply_to_configured_group_dv():
+    assert set(SOUTH_PROJECT_GROUP_DVS) == {
+        "Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng",
+        "Internet trực tiếp",
+    }
+    for group_dv in SOUTH_PROJECT_GROUP_DVS:
+        rule = next(item for item in SOUTH_RULES if item.group_dv == group_dv)
+        ticket = Ticket(
+            "GD", "TB", rule.service, service_type=rule.service,
+            customer_name="CAX BCA", labor_address="Hồ Chí Minh",
+            channel_type=(
+                "Nội tỉnh" if group_dv == "Mega NT"
+                else "Liên tỉnh" if group_dv == "Mega LT" else ""
+            ),
+        )
+        assignment = plan_assignments(
+            [ticket], [rule], project_rules=SOUTH_PROJECTS,
+            south_special_rules=True, planning_day="2026-10-14",
+        )[0]
+        assert assignment.project_name == "Dự án BCA", group_dv
+        assert assignment.points == rule.points * Decimal("1.2")
+
+    excluded_rule = next(item for item in SOUTH_RULES if item.group_dv == "Web Hosting")
+    excluded_ticket = Ticket(
+        "GD2", "TB2", excluded_rule.service, service_type=excluded_rule.service,
+        customer_name="CAX BCA", labor_address="Hồ Chí Minh",
+    )
+    excluded_assignment = plan_assignments(
+        [excluded_ticket], [excluded_rule], project_rules=SOUTH_PROJECTS,
+        south_special_rules=True, planning_day="2026-10-14",
+    )[0]
+    assert excluded_assignment.project_name == ""
+    assert excluded_assignment.points == excluded_rule.points
 
 
 def test_south_rules_include_leasedline_100ge():

@@ -33,6 +33,11 @@ _MEMBER_NAME_ALIASES = {
     normalize("Lý Bích Hằng"): "Lý Thị Bích Hằng",
 }
 
+SOUTH_PROJECT_GROUP_DVS = (
+    "Fiber", "Mega NT", "Mega LT", "Kênh Thuê Riêng",
+    "Internet trực tiếp",
+)
+
 
 def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
     """Load named high-priority routing rules from a small editable TOML file."""
@@ -124,9 +129,15 @@ def load_project_rules(path: str | Path | None) -> list[ProjectRule]:
 
 
 def match_project_rule(
-    project_rules: list[ProjectRule], ticket: Ticket
+    project_rules: list[ProjectRule], ticket: Ticket, *,
+    group_dv: str | None = None,
+    allowed_group_dvs: tuple[str, ...] | None = None,
 ) -> ProjectMatch | None:
     """Return a named project override, or fail safely for an unknown project area."""
+    if allowed_group_dvs is not None and normalize(unaccent(group_dv or "")) not in {
+        normalize(unaccent(name)) for name in allowed_group_dvs
+    }:
+        return None
     for rule in project_rules:
         values = [unaccent(getattr(ticket, field, "")) for field in rule.match_fields]
         if not any(unaccent(rule.contains) in value for value in values):
@@ -398,7 +409,8 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
         ).value
         sheet_service = str(raw_sheet_service or "").strip() or service
         signature = (
-            normalize(service), normalize(sheet_service), points, normalize(condition),
+            normalize(service), normalize(sheet_service), normalize(group_name),
+            points, normalize(condition),
             tuple((normalize(m.name), normalize(m.group), m.target_share) for m in members),
         )
         if signature in signatures:
@@ -406,7 +418,7 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
         signatures.add(signature)
         rules.append(ServiceRule(
             base_row, service, points, condition, members, sheet_service,
-            count_points, write_to_sheet, send_to_api,
+            count_points, write_to_sheet, send_to_api, group_name,
         ))
     if not rules:
         raise RuleError("Sheet Group DV không có dòng ánh xạ dịch vụ hợp lệ")

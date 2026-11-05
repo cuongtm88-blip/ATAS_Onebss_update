@@ -23,6 +23,7 @@ class ServiceRule:
     count_points: bool = True
     write_to_sheet: bool = True
     send_to_api: bool = True
+    group_dv: str = ""
 
 
 @dataclass(frozen=True)

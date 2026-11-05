@@ -11,6 +11,7 @@ from .rules import (
     member_score_key,
     match_project_rule,
     match_rule,
+    SOUTH_PROJECT_GROUP_DVS,
     voice_brandname_mode,
 )
 from .text import assignment_cohort_key, normalize, ticket_identity, unaccent
@@ -168,6 +169,16 @@ def plan_assignments(
         if sheet_existing_keys is not None
         else set(preferred_assignees)
     )
+    allowed_project_group_dvs = (
+        SOUTH_PROJECT_GROUP_DVS if south_special_rules else None
+    )
+
+    def project_for(ticket: Ticket, rule: ServiceRule):
+        return match_project_rule(
+            project_rules or [], ticket,
+            group_dv=rule.group_dv if south_special_rules else None,
+            allowed_group_dvs=allowed_project_group_dvs,
+        )
 
     candidates: list[
         tuple[
@@ -293,7 +304,7 @@ def plan_assignments(
         if manual_assignee:
             groups = {"Chỉ định thủ công": [manual_assignee]}
             try:
-                project = match_project_rule(project_rules or [], ticket)
+                project = project_for(ticket, rule)
             except RuleError:
                 project = None
             project_name = project.project_name if project else ""
@@ -322,7 +333,7 @@ def plan_assignments(
                 for index, assignee in enumerate(preferred, start=1)
             }
             try:
-                project = match_project_rule(project_rules or [], ticket)
+                project = project_for(ticket, rule)
             except RuleError:
                 project = None
             project_name = project.project_name if project else ""
@@ -338,7 +349,7 @@ def plan_assignments(
             # self-contained dispatch rules and must keep their Excel owner,
             # even when customer text also happens to match a named project.
             project = (
-                match_project_rule(project_rules or [], ticket)
+                project_for(ticket, rule)
                 if rule.write_to_sheet else None
             )
             if project:

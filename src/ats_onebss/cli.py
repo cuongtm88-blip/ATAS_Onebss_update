@@ -39,6 +39,7 @@ from .rules import (
     match_project_rule,
     match_rule,
     member_group,
+    SOUTH_PROJECT_GROUP_DVS,
     voice_brandname_mode,
 )
 from .text import normalize, ticket_identity, unaccent
@@ -279,6 +280,9 @@ async def collect_plan(
     customer_rules = any(
         "customer_name" in project.match_fields for project in project_rules
     )
+    south_project_group_keys = {
+        normalize(unaccent(group_dv)) for group_dv in SOUTH_PROJECT_GROUP_DVS
+    }
     for ticket in tickets:
         try:
             requested_assignee = pending_overrides.get(ticket.key)
@@ -294,7 +298,19 @@ async def collect_plan(
                 manual_assignees[ticket.key] = canonical_assignee
                 valid.append(ticket)
                 continue
-            if customer_rules and not ticket.customer_name:
+            try:
+                current_rule = match_rule(rules, ticket)
+            except RuleError:
+                current_rule = None
+            project_applies = (
+                not config.south_special_rules
+                or (
+                    current_rule is not None
+                    and normalize(unaccent(current_rule.group_dv))
+                    in south_project_group_keys
+                )
+            )
+            if project_applies and customer_rules and not ticket.customer_name:
                 raise RuleError(
                     "Không đọc được Tên KH để kiểm tra phiếu dự án; "
                     "giữ phiếu chưa giao và sẽ thử đọc lại ở chu kỳ sau."
@@ -302,10 +318,6 @@ async def collect_plan(
             prior_assignees = sheet_assignees.get(
                 ticket_identity(ticket.transaction_id, ticket.subscriber_id)
             )
-            try:
-                current_rule = match_rule(rules, ticket)
-            except RuleError:
-                current_rule = None
             if current_rule is not None and not current_rule.write_to_sheet:
                 # Ignore historical rows written before this policy was
                 # implemented; this service follows Excel, not Sheet history.
@@ -350,7 +362,16 @@ async def collect_plan(
                         excluded_members,
                     )
                 else:
-                    project = match_project_rule(project_rules, ticket)
+                    project = match_project_rule(
+                        project_rules, ticket,
+                        group_dv=(
+                            rule.group_dv if config.south_special_rules else None
+                        ),
+                        allowed_group_dvs=(
+                            SOUTH_PROJECT_GROUP_DVS
+                            if config.south_special_rules else None
+                        ),
+                    )
                     if project:
                         available = [
                             name for name in project.assignees

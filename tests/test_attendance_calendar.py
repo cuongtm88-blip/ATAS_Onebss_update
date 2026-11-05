@@ -158,6 +158,7 @@ def test_calendar_append_migrates_legacy_sheet_header(monkeypatch):
     from ats_onebss.browser import GoogleSheetClient
 
     sheet_rows = [HEADER[:-1].copy()]
+    page_holder = {}
 
     class NameBox:
         value = ""
@@ -171,14 +172,50 @@ def test_calendar_append_migrates_legacy_sheet_header(monkeypatch):
         async def input_value(self):
             return self.value
 
+    class MenuItem:
+        async def hover(self):
+            return None
+
+        async def click(self):
+            page_holder["page"].columns_inserted += 1
+
+    class MenuItems:
+        def nth(self, _index):
+            return MenuItem()
+
+        @property
+        def last(self):
+            return MenuItem()
+
+    class Menus:
+        def __init__(self):
+            self.items = MenuItems()
+
+        @property
+        def last(self):
+            return self
+
+        def locator(self, _selector):
+            return self.items
+
+    class InsertMenu:
+        async def click(self):
+            return None
+
     class Page:
         def __init__(self):
             self.name_box = NameBox()
             self.clipboard = ""
+            self.columns_inserted = 0
             self.keyboard = SimpleNamespace(press=self.press)
+            page_holder["page"] = self
 
-        def locator(self, _selector):
-            return self.name_box
+        def locator(self, selector):
+            if selector == "#t-name-box":
+                return self.name_box
+            if selector == "#docs-insert-menu":
+                return InsertMenu()
+            return Menus() if selector == '[role="menu"]:visible' else MenuItems()
 
         async def evaluate(self, _script, text):
             self.clipboard = text
@@ -224,6 +261,7 @@ def test_calendar_append_migrates_legacy_sheet_header(monkeypatch):
 
     assert sheet_rows[0] == HEADER
     assert sheet_rows[1] == event
+    assert client.page.columns_inserted == 1
 
 
 def test_calendar_sync_accepts_legacy_header(tmp_path):

@@ -2647,6 +2647,22 @@ class GoogleSheetClient:
                 len(existing[0]) < len(HEADER)
                 or not existing[0][len(HEADER) - 1]
             ):
+                # Legacy calendar tabs may have had all columns after K
+                # deleted. Insert the new column through Sheets before
+                # selecting L1; pasting directly into a missing column makes
+                # Google Sheets reject the range as outside the grid.
+                await name_box.fill("K:K")
+                await name_box.press("Enter")
+                await page.locator("#docs-insert-menu").click()
+                main_items = page.locator(
+                    '[role="menu"]:visible [role="menuitem"]'
+                )
+                await main_items.nth(2).hover()  # Cột / Columns
+                submenus = page.locator('[role="menu"]:visible')
+                await submenus.last.locator(
+                    '[role="menuitem"]'
+                ).last.click()  # Insert column right
+                await page.wait_for_timeout(400)
                 await name_box.fill("L1")
                 await name_box.press("Enter")
                 await page.evaluate(

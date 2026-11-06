@@ -120,6 +120,9 @@ jobs:
               bulk_override = find_code(ledger_module, "set_manual_overrides")
               selected_skipped = find_code(gui, "_selected_skipped_tickets")
               assign_skipped = find_code(gui, "_assign_selected_skipped")
+              calendar_crash_check = find_code(cli, "_is_browser_target_crash")
+              open_clients = find_code(cli, "open_clients")
+              watch = find_code(cli, "command_watch")
               assert process_available and any(
                   isinstance(value, str) and value.startswith("Bắt đầu đọc lô ")
                   for value in process_available.co_consts
@@ -142,12 +145,20 @@ jobs:
               assert bulk_override and "executemany" in bulk_override.co_names
               assert selected_skipped and "Mã giao dịch" in selected_skipped.co_consts
               assert assign_skipped and "set_manual_overrides" in assign_skipped.co_names
+              assert calendar_crash_check and "target crashed" in calendar_crash_check.co_consts
+              assert open_clients and {
+                  "_is_browser_target_crash", "restart_context",
+              } <= set(open_clients.co_names)
+              assert watch and {
+                  "_is_browser_target_crash", "recover_browser",
+              } <= set(watch.co_names)
               print("Verified packaged VIP-skip handling.")
               print("Verified packaged attendance percentage and monthly filter.")
               print("Verified packaged region classification and project multiplier.")
               print("Verified packaged count-status sheet field and bulk skipped-ticket assignment.")
               print("Verified packaged North queue window threshold and size.")
               print("Verified packaged outside-hours toggle and worker option.")
+              print("Verified packaged calendar sync crash recovery before OneBSS startup and during cycles.")
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -171,3 +182,4 @@ jobs:
             - Gói ứng dụng chỉ dành cho macOS Apple Silicon.
             - Phân loại tỉnh từ Địa chỉ lắp đặt, dự phòng Tỉnh LĐ; đánh dấu Không tính cho phiếu ngoài Miền Bắc.
             - Áp dụng hệ số điểm dự án 1,2; đồng bộ công thức ngày/tháng và hỗ trợ chỉ định nhiều phiếu chưa giao.
+            - Phục hồi Chromium khi tab Google Sheets crash trong lúc đồng bộ lịch, sau đó tiếp tục mở OneBSS.

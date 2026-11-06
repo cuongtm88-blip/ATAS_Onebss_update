@@ -47,6 +47,67 @@ def test_outside_working_hours_override_bypasses_weekends_and_sessions():
     assert cli._working_time_block_reason(config, calendar, weekend) is None
 
 
+def test_open_clients_recovers_from_calendar_target_crash_before_opening_onebss(
+    monkeypatch,
+):
+    calls = []
+
+    class FakeSession:
+        async def restart_context(self):
+            calls.append("restart")
+
+    class FakeOneBSS:
+        page = None
+
+        def __init__(self, _session):
+            pass
+
+        async def open(self):
+            calls.append("onebss.open")
+
+        async def session_is_logged_in(self):
+            return True
+
+        async def ensure_unassigned_filters(self):
+            calls.append("onebss.filters")
+
+        async def refresh_tickets(self):
+            calls.append("onebss.refresh")
+
+    class FakeSheet:
+        page = None
+
+        def __init__(self, _session):
+            pass
+
+        async def open(self):
+            calls.append("sheet.open")
+
+    async def fail_calendar_sync(*_args):
+        raise RuntimeError("Target crashed")
+
+    async def no_pending(*_args):
+        calls.append("sync_pending")
+
+    monkeypatch.setattr(cli, "OneBSSClient", FakeOneBSS)
+    monkeypatch.setattr(cli, "GoogleSheetClient", FakeSheet)
+    monkeypatch.setattr(cli, "sync_attendance_calendar", fail_calendar_sync)
+    monkeypatch.setattr(cli, "sync_pending", no_pending)
+
+    config = SimpleNamespace(attendance_calendar_file="attendance.json")
+    onebss, _sheet = asyncio.run(
+        cli.open_clients(
+            config, FakeSession(), object(), object(),
+        )
+    )
+
+    assert calls == [
+        "sheet.open", "restart", "onebss.open", "sync_pending",
+        "onebss.filters", "onebss.refresh",
+    ]
+    assert isinstance(onebss, FakeOneBSS)
+
+
 def test_collect_plan_routes_voice_xu_ly_away_from_old_supervision_owner(
     monkeypatch,
 ):
@@ -513,6 +574,58 @@ def test_watch_retries_failed_cycle_without_normal_interval(tmp_path, monkeypatc
     assert attempts == 2
     assert delays == [3]
     assert onebss.refreshes == 1
+
+
+def test_watch_recovers_calendar_target_crash_and_continues_cycle(tmp_path, monkeypatch):
+    config = SimpleNamespace(
+        database=tmp_path / "ledger.db",
+        poll_interval_minutes=15,
+        error_retry_seconds=3,
+        timezone="Asia/Ho_Chi_Minh",
+        attendance_calendar_file=tmp_path / "attendance.json",
+    )
+    recovered = []
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class FakeOneBSS:
+        async def session_is_logged_in(self):
+            return True
+
+        async def refresh_tickets(self):
+            return None
+
+    async def fake_open_clients(*_args):
+        return FakeOneBSS(), object()
+
+    async def fail_calendar_sync(*_args):
+        raise RuntimeError("Target crashed")
+
+    async def fake_recover(*_args):
+        recovered.append(True)
+
+    async def fake_load_sheet_source(*_args):
+        return {}, {}
+
+    async def cancel_after_cycle(*_args):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(cli, "BrowserSession", lambda _config: FakeSession())
+    monkeypatch.setattr(cli, "open_clients", fake_open_clients)
+    monkeypatch.setattr(cli, "sync_attendance_calendar", fail_calendar_sync)
+    monkeypatch.setattr(cli, "recover_browser", fake_recover)
+    monkeypatch.setattr(cli, "load_sheet_source", fake_load_sheet_source)
+    monkeypatch.setattr(cli, "process_available", cancel_after_cycle)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(cli.command_watch(config))
+
+    assert recovered == [True]
 
 
 def test_automatic_login_stops_after_three_attempts(monkeypatch):

@@ -533,6 +533,14 @@ async def sync_attendance_calendar(config: Config, sheet: GoogleSheetClient) -> 
     )
 
 
+def _is_browser_target_crash(error: Exception) -> bool:
+    message = str(error).casefold()
+    return (
+        "target crashed" in message
+        or "target page, context or browser has been closed" in message
+    )
+
+
 async def command_plan(config: Config) -> None:
     ledger = Ledger(config.database)
     async with BrowserSession(config) as session:
@@ -902,7 +910,18 @@ async def open_clients(
     onebss = OneBSSClient(session)
     sheet = GoogleSheetClient(session)
     await sheet.open()
-    await sync_attendance_calendar(config, sheet)
+    try:
+        await sync_attendance_calendar(config, sheet)
+    except Exception as error:
+        if not _is_browser_target_crash(error):
+            raise
+        print(
+            f"Tab Chromium bị crash khi đồng bộ lịch ({error}); "
+            "đang khởi động lại trình duyệt để tiếp tục mở OneBSS."
+        )
+        await session.restart_context()
+        onebss.page = None
+        sheet.page = None
     await onebss.open()
     if not await onebss.session_is_logged_in():
         username, password = load_credentials(region_key)
@@ -1212,7 +1231,18 @@ async def command_watch(config: Config) -> None:
             now = asyncio.get_running_loop().time()
             if now >= next_automatic_cycle:
               try:
-                await sync_attendance_calendar(config, sheet)
+                try:
+                    await sync_attendance_calendar(config, sheet)
+                except Exception as calendar_error:
+                    if not _is_browser_target_crash(calendar_error):
+                        raise
+                    print(
+                        "Tab Chromium bị crash khi đồng bộ lịch; đang phục hồi "
+                        "trình duyệt rồi tiếp tục chu kỳ bằng lịch đã lưu cục bộ."
+                    )
+                    await recover_browser(
+                        config, session, onebss, sheet, ledger, dashboard
+                    )
                 sheet_assignees, balance_scores = await load_sheet_source(
                     config, sheet, ledger
                 )

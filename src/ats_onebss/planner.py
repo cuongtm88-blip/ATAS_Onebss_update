@@ -224,6 +224,15 @@ def plan_assignments(
         connection_pair_keys[other.key] = pair_key
         paired.update(pair)
     for ticket in tickets:
+        if (
+            normalize(ticket.service_type or ticket.service)
+            == normalize("SMS Brandname")
+            and normalize(ticket.installation_type)
+            == normalize("Tạo đơn hàng trả trước")
+        ):
+            # This installation type has a fixed owner, independent of VIP
+            # state, project matches, Sheet history, or cohort affinity.
+            continue
         try:
             seed_rule = match_rule(rules, ticket)
         except RuleError:
@@ -255,6 +264,13 @@ def plan_assignments(
         identity = ticket_identity(ticket.transaction_id, ticket.subscriber_id)
         preferred = preferred_assignees.get(identity)
         manual_assignee = manual_assignees.get(ticket.key, "")
+        sms_prepaid_route = (
+            not manual_assignee
+            and normalize(ticket.service_type or ticket.service)
+            == normalize("SMS Brandname")
+            and normalize(ticket.installation_type)
+            == normalize("Tạo đơn hàng trả trước")
+        )
         on_current_sheet = identity in current_sheet_keys
         # A previously assigned ticket is always written as a new "Giao lại"
         # row, even when it was already present on this month's tab. Prior-month
@@ -280,7 +296,10 @@ def plan_assignments(
             preferred = tuple(
                 canonical_member_name(rules, assignee) for assignee in preferred
             )
-            if any(normalize(assignee) in excluded for assignee in preferred):
+            if (
+                not sms_prepaid_route
+                and any(normalize(assignee) in excluded for assignee in preferred)
+            ):
                 continue
         # A per-ticket manual assignment explicitly overrides service rules,
         # including Voice Brandname's VIP routing requirement. Automatic
@@ -311,6 +330,25 @@ def plan_assignments(
             project_name = project.project_name if project else ""
             sheet_existing = in_sheet_history and rule.write_to_sheet
             sheet_reassignment = sheet_existing
+        elif sms_prepaid_route:
+            assignee = "Lê Đức Tuấn"
+            if normalize(assignee) in excluded:
+                if skipped_reasons is not None:
+                    skipped_reasons[ticket.key] = (
+                        "SMS Brandname loại lắp đặt 'Tạo đơn hàng trả trước' "
+                        "được chỉ định cho Lê Đức Tuấn, nhưng nhân sự đang nghỉ phép"
+                    )
+                continue
+            try:
+                group = member_group(rules, assignee, rule)
+            except RuleError as error:
+                if skipped_reasons is None:
+                    raise
+                skipped_reasons[ticket.key] = str(error)
+                continue
+            groups = {group or "SMS Brandname trả trước": [assignee]}
+            project_name = ""
+            sheet_existing = in_sheet_history and rule.write_to_sheet
         elif voice_mode == "giam_sat":
             groups = eligible_members(
                 rule, ticket, use_backups, excluded_names
@@ -392,7 +430,8 @@ def plan_assignments(
                 sheet_reassignment = False
         eligible_count = sum(len(members) for members in groups.values())
         cohort_key = connection_pair_keys.get(ticket.key) or (
-            "" if manual_assignee or voice_mode in {"xu_ly", "giam_sat"}
+            "" if manual_assignee or sms_prepaid_route
+            or voice_mode in {"xu_ly", "giam_sat"}
             or uses_percentage_routing(rule) else assignment_cohort_key(
                 ticket.customer_name, ticket.labor_address,
                 ticket.service_type or ticket.service,

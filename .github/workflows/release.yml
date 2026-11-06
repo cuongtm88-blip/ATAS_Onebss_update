@@ -75,6 +75,9 @@ jobs:
               plan_assignments = find_code(
                   archive.extract("ats_onebss.planner"), "plan_assignments"
               )
+              assert plan_assignments and {
+                  "SMS Brandname", "Tạo đơn hàng trả trước", "Lê Đức Tuấn",
+              } <= set(plan_assignments.co_consts)
               browser = archive.extract("ats_onebss.browser")
               attendance = archive.extract("ats_onebss.attendance")
               attendance_ui = archive.extract("ats_onebss.attendance_ui")
@@ -153,6 +156,7 @@ jobs:
                   "_is_browser_target_crash", "recover_browser",
               } <= set(watch.co_names)
               print("Verified packaged VIP-skip handling.")
+              print("Verified packaged SMS prepaid-order routing.")
               print("Verified packaged attendance percentage and monthly filter.")
               print("Verified packaged region classification and project multiplier.")
               print("Verified packaged count-status sheet field and bulk skipped-ticket assignment.")
@@ -183,3 +187,4 @@ jobs:
             - Phân loại tỉnh từ Địa chỉ lắp đặt, dự phòng Tỉnh LĐ; đánh dấu Không tính cho phiếu ngoài Miền Bắc.
             - Áp dụng hệ số điểm dự án 1,2; đồng bộ công thức ngày/tháng và hỗ trợ chỉ định nhiều phiếu chưa giao.
             - Phục hồi Chromium khi tab Google Sheets crash trong lúc đồng bộ lịch, sau đó tiếp tục mở OneBSS.
+            - Phiếu SMS Brandname có Kiểu lắp đặt “Tạo đơn hàng trả trước” được giao cố định cho Lê Đức Tuấn, không phụ thuộc VIP xử lý.

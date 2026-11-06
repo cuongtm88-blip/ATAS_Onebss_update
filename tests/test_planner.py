@@ -6,6 +6,49 @@ from ats_onebss.rules import member_score_key
 from ats_onebss.text import assignment_cohort_key
 
 
+def test_sms_brandname_prepaid_order_always_goes_to_le_duc_tuan_without_vip():
+    rule = ServiceRule(
+        34, "SMS Brandname", Decimal("25"), "",
+        (
+            Member("Lê Đức Tuấn", "Nhóm 2", "Chính"),
+            Member("An", "Nhóm 2", "Chính"),
+        ),
+    )
+    ticket = Ticket(
+        "GD-SMS-PREPAID", "TB-SMS-PREPAID", "SMS Brandname",
+        service_type="SMS Brandname",
+        installation_type="Tạo đơn hàng trả trước",
+        vip_status="",
+    )
+
+    result = plan_assignments(
+        [ticket], [rule], preferred_assignees={ticket.key: ("An",)},
+    )
+
+    assert result[0].assignees == ("Lê Đức Tuấn",)
+
+
+def test_sms_brandname_prepaid_is_skipped_if_fixed_owner_is_excluded():
+    rule = ServiceRule(
+        34, "SMS Brandname", Decimal("25"), "",
+        (Member("Lê Đức Tuấn", "Nhóm 2", "Chính"),),
+    )
+    ticket = Ticket(
+        "GD-SMS-LEAVE", "TB-SMS-LEAVE", "SMS Brandname",
+        service_type="SMS Brandname",
+        installation_type="Tạo đơn hàng trả trước",
+    )
+    skipped = {}
+
+    result = plan_assignments(
+        [ticket], [rule], excluded_members=("Lê Đức Tuấn",),
+        skipped_reasons=skipped,
+    )
+
+    assert result == []
+    assert "Lê Đức Tuấn" in skipped[ticket.key]
+
+
 def test_dual_group_employee_is_balanced_against_current_service_group():
     group_1 = ServiceRule(
         3, "Fiber", Decimal("17"), "",

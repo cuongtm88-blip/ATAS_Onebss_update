@@ -341,7 +341,7 @@ def test_install_rules_file_accepts_group_percentage_workbook(tmp_path):
     backup = gui.install_rules_file(source, target)
 
     assert backup is None
-    assert len(gui.load_rules(target)) == 67
+    assert len(gui.load_rules(target)) == 69
 
 
 def test_install_rules_file_rejects_non_excel_file(tmp_path):

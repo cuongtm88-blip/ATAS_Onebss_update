@@ -47,7 +47,7 @@ jobs:
           grep -q '^read_batch_size = 20$' "$extracted/Contents/Frameworks/config.toml"
           grep -q '^read_batch_threshold = 50$' "$extracted/Contents/Frameworks/config.toml"
           grep -q 'Cục Tin Học Và Thống Kê Tài Chính' "$extracted/Contents/Frameworks/project_rules.toml"
-          uv run python -c 'from ats_onebss.rules import load_rules; from pathlib import Path; import sys; rules=load_rules(Path(sys.argv[1])); assert len(rules) == 67; print(f"Verified packaged rules: {len(rules)}")' "$extracted/Contents/Frameworks/assignment_rules.xlsx"
+          uv run python -c 'from ats_onebss.rules import load_rules; from pathlib import Path; import sys; rules=load_rules(Path(sys.argv[1])); assert len(rules) == 69; print(f"Verified packaged rules: {len(rules)}")' "$extracted/Contents/Frameworks/assignment_rules.xlsx"
           uv run python - "$extracted" <<'PY'
           from pathlib import Path
           import tempfile
@@ -98,6 +98,7 @@ jobs:
               availability = find_code(attendance, "monthly_availability_ratios")
               validate_calendar = find_code(attendance, "validate_calendar")
               assert availability and "deduction_percent" in availability.co_consts
+              assert "effective_date" in availability.co_cellvars
               assert validate_calendar and "deduction_percent" in validate_calendar.co_consts
               dialog_init = find_code(attendance_ui, "__init__")
               table_filter = find_code(attendance_ui, "_refresh_leave_table")
@@ -158,6 +159,7 @@ jobs:
               print("Verified packaged VIP-skip handling.")
               print("Verified packaged SMS prepaid-order routing.")
               print("Verified packaged attendance percentage and monthly filter.")
+              print("Verified attendance deductions activate on leave dates.")
               print("Verified packaged region classification and project multiplier.")
               print("Verified packaged count-status sheet field and bulk skipped-ticket assignment.")
               print("Verified packaged North queue window threshold and size.")
@@ -188,3 +190,4 @@ jobs:
             - Áp dụng hệ số điểm dự án 1,2; đồng bộ công thức ngày/tháng và hỗ trợ chỉ định nhiều phiếu chưa giao.
             - Phục hồi Chromium khi tab Google Sheets crash trong lúc đồng bộ lịch, sau đó tiếp tục mở OneBSS.
             - Phiếu SMS Brandname có Kiểu lắp đặt “Tạo đơn hàng trả trước” được giao cố định cho Lê Đức Tuấn, không phụ thuộc VIP xử lý.
+            - Mục tiêu tải theo lịch nghỉ chỉ giảm từ ngày nghỉ thực tế; ngày nghỉ tương lai chưa làm giảm mục tiêu.

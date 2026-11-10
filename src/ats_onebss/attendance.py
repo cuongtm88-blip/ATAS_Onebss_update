@@ -142,11 +142,17 @@ def default_leave_deduction_percent(
 
 def monthly_availability_ratios(
     calendar: dict[str, Any], member_names: tuple[str, ...] | list[str],
-    year: int, month: int,
+    year: int, month: int, as_of: date | None = None,
 ) -> dict[str, Decimal]:
+    """Return each member's month target after leave days reached so far.
+
+    Future leave dates do not reduce the target early. Once a leave date is
+    reached, its configured daily deduction is included in the month ratio.
+    """
     workdays = working_dates(year, month, calendar)
     if not workdays:
         return {name: Decimal(1) for name in member_names}
+    effective_date = as_of or date.today()
     day_set = set(workdays)
     ratios: dict[str, Decimal] = {}
     for name in member_names:
@@ -165,7 +171,8 @@ def monthly_availability_ratios(
             else:
                 deduction_percent = Decimal(deduction_percent)
             affected_workdays = sum(
-                1 for day in day_set if start <= day <= end
+                1 for day in day_set
+                if start <= day <= end and day <= effective_date
             )
             unavailable += (
                 leave_units * deduction_percent / Decimal(100)

@@ -89,6 +89,29 @@ def test_custom_half_day_deduction_is_half_of_daily_percent():
     )["Nhân viên A"] == Decimal("0.975")
 
 
+def test_future_leave_reduces_target_only_when_leave_date_is_reached():
+    calendar = validate_calendar({
+        "overrides": [],
+        "leave": [{
+            "member": "Nhân viên A",
+            "start_date": "2026-11-18",
+            "end_date": "2026-11-20",
+            "session": "full",
+            "deduction_percent": "5",
+        }],
+    })
+
+    before_leave = monthly_availability_ratios(
+        calendar, ["Nhân viên A"], 2026, 11, date(2026, 11, 17),
+    )
+    first_leave_day = monthly_availability_ratios(
+        calendar, ["Nhân viên A"], 2026, 11, date(2026, 11, 18),
+    )
+
+    assert before_leave["Nhân viên A"] == Decimal(1)
+    assert first_leave_day["Nhân viên A"] == Decimal("0.95")
+
+
 def test_working_sessions_are_morning_and_afternoon_only():
     assert is_working_session(datetime.fromisoformat("2026-10-05T08:00:00"))
     assert not is_working_session(datetime.fromisoformat("2026-10-05T12:00:00"))

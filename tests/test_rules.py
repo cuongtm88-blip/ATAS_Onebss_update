@@ -304,7 +304,7 @@ def test_demo2_percentage_workbook_expands_service_map_and_preserves_api_flags()
     workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
     rules = load_rules(workbook)
 
-    assert len(rules) == 67
+    assert len(rules) == 69
     sip = match_rule(rules, Ticket("GD1", "TB1", "ISDN 30B+D cáp đồng"))
     assert sip.sheet_service == "SIP"
     assert {member.name: member.target_share for member in sip.members} == {
@@ -371,16 +371,16 @@ def test_demo2_percentage_rows_sum_to_100_and_keep_fixed_group_roster():
     rules = load_rules(workbook)
     names = load_score_member_names(workbook)
     group_members = {
-        group: {
+        normalize(group): {
             member.name
             for rule in rules for member in rule.members
-            if member.group == group
+            if normalize(member.group) == normalize(group)
         }
         for group in {member.group for rule in rules for member in rule.members}
     }
 
-    assert len(group_members["Nhóm 1"]) == 14
-    assert len(group_members["Nhóm 2"]) == 4
+    assert len(group_members[normalize("Nhóm 1")]) == 14
+    assert len(group_members[normalize("Nhóm 2")]) == 4
     # Lê Đức Tuấn is two separate scoring seats, one in each group.
     assert len(names) == 18
 

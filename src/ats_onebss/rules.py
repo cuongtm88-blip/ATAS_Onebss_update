@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tomllib
+import unicodedata
 from decimal import Decimal
 from pathlib import Path
 
@@ -290,7 +291,7 @@ def _load_group_rules(workbook) -> list[ServiceRule]:
     for col in range(member_start, member_end + 1):
         label = str(rule_sheet.cell(1, col).value or "").strip()
         if label:
-            current_group = label
+            current_group = unicodedata.normalize("NFC", label)
         group_by_column[col] = current_group or "Nhóm 1"
 
     grouped_rules: dict[tuple[str, Decimal], tuple[int, str, Decimal, tuple[Member, ...], bool, bool, bool]] = {}
@@ -480,7 +481,7 @@ def load_rules(path: str | Path) -> list[ServiceRule]:
             continue
         label = str(sheet.cell(1, col).value or "").strip()
         if label:
-            current_group = label
+            current_group = unicodedata.normalize("NFC", label)
         group_by_column[col] = current_group or "Nhóm 1"
 
     rules: list[ServiceRule] = []

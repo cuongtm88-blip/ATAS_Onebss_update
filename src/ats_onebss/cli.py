@@ -487,7 +487,9 @@ def attendance_adjusted_config(config: Config) -> Config:
     now = datetime.now(ZoneInfo(config.timezone))
     rules = load_rules(config.rules_file)
     members = tuple(dict.fromkeys(member.name for rule in rules for member in rule.members))
-    availability = monthly_availability_ratios(calendar, members, now.year, now.month)
+    availability = monthly_availability_ratios(
+        calendar, members, now.year, now.month, now.date(),
+    )
     targets = dict(config.member_target_ratios)
     for name, ratio in availability.items():
         targets[name] = targets.get(name, Decimal(1)) * ratio

@@ -102,8 +102,13 @@ jobs:
               assert validate_calendar and "deduction_percent" in validate_calendar.co_consts
               dialog_init = find_code(attendance_ui, "__init__")
               table_filter = find_code(attendance_ui, "_refresh_leave_table")
+              refresh_tables = find_code(attendance_ui, "_refresh_tables")
+              remove_selected = find_code(attendance_ui, "_remove_selected")
               assert dialog_init and {"leave_month", "leave_year", "leave_deduction"} <= set(dialog_init.co_names)
               assert table_filter and "_selected_month" in table_filter.co_names
+              assert refresh_tables and "UserRole" in refresh_tables.co_names
+              assert table_filter and "UserRole" in table_filter.co_names
+              assert remove_selected and {"UserRole", "selectedItems"} <= set(remove_selected.co_names)
               sync_state = find_code(calendar_sync, "_cloud_state")
               assert sync_state and "deduction_percent" in repr(sync_state.co_consts)
               calendar_writer = find_code(browser, "append_calendar_events")
@@ -160,6 +165,7 @@ jobs:
               print("Verified packaged SMS prepaid-order routing.")
               print("Verified packaged attendance percentage and monthly filter.")
               print("Verified attendance deductions activate on leave dates.")
+              print("Verified filtered leave rows delete their original calendar records.")
               print("Verified packaged region classification and project multiplier.")
               print("Verified packaged count-status sheet field and bulk skipped-ticket assignment.")
               print("Verified packaged North queue window threshold and size.")
@@ -191,3 +197,4 @@ jobs:
             - Phục hồi Chromium khi tab Google Sheets crash trong lúc đồng bộ lịch, sau đó tiếp tục mở OneBSS.
             - Phiếu SMS Brandname có Kiểu lắp đặt “Tạo đơn hàng trả trước” được giao cố định cho Lê Đức Tuấn, không phụ thuộc VIP xử lý.
             - Mục tiêu tải theo lịch nghỉ chỉ giảm từ ngày nghỉ thực tế; ngày nghỉ tương lai chưa làm giảm mục tiêu.
+            - Sửa xóa lịch nghỉ theo đúng bản ghi gốc khi danh sách đang lọc theo tháng.

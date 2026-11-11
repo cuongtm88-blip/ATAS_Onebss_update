@@ -191,10 +191,12 @@ class AttendanceCalendarDialog(QDialog):
     def _refresh_tables(self) -> None:
         labels = {"holiday": "Ngày nghỉ lễ", "workday": "Ngày làm bù"}
         self.override_table.setRowCount(0)
-        for entry in self.data["overrides"]:
+        for index, entry in enumerate(self.data["overrides"]):
             row = self.override_table.rowCount()
             self.override_table.insertRow(row)
-            self.override_table.setItem(row, 0, QTableWidgetItem(self._display_date(entry["date"])))
+            date_item = QTableWidgetItem(self._display_date(entry["date"]))
+            date_item.setData(Qt.UserRole, index)
+            self.override_table.setItem(row, 0, date_item)
             self.override_table.setItem(row, 1, QTableWidgetItem(labels[entry["status"]]))
         self._refresh_leave_table()
 
@@ -213,7 +215,7 @@ class AttendanceCalendarDialog(QDialog):
         sessions = {"full": "Cả ngày", "morning": "Nửa ngày sáng", "afternoon": "Nửa ngày chiều"}
         default_percent = default_leave_deduction_percent(year, month, self.data)
         self.leave_table.setRowCount(0)
-        for entry in self.data["leave"]:
+        for index, entry in enumerate(self.data["leave"]):
             start = date.fromisoformat(entry["start_date"])
             end = date.fromisoformat(entry["end_date"])
             if end < first or start >= next_month:
@@ -226,7 +228,10 @@ class AttendanceCalendarDialog(QDialog):
                 f"{Decimal(entry.get('deduction_percent', default_percent)):.4f}%",
             )
             for column, value in enumerate(values):
-                self.leave_table.setItem(row, column, QTableWidgetItem(value))
+                item = QTableWidgetItem(value)
+                if column == 0:
+                    item.setData(Qt.UserRole, index)
+                self.leave_table.setItem(row, column, item)
 
     def _add_override(self) -> None:
         day = self._date_value(self.override_date)
@@ -264,8 +269,15 @@ class AttendanceCalendarDialog(QDialog):
 
     def _remove_selected(self, table: QTableWidget, key: str) -> None:
         rows = sorted({item.row() for item in table.selectedItems()}, reverse=True)
-        for row in rows:
-            del self.data[key][row]
+        record_indices = sorted({
+            int(table.item(row, 0).data(Qt.UserRole))
+            for row in rows
+            if table.item(row, 0) is not None
+            and table.item(row, 0).data(Qt.UserRole) is not None
+        }, reverse=True)
+        for index in record_indices:
+            if 0 <= index < len(self.data[key]):
+                del self.data[key][index]
         self._refresh_tables()
 
     def _save(self) -> None:

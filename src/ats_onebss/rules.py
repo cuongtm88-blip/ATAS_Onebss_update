@@ -564,10 +564,34 @@ def _condition_matches(rule: ServiceRule, ticket: Ticket) -> bool:
     return True
 
 
-def match_rule(rules: list[ServiceRule], ticket: Ticket) -> ServiceRule:
+def is_south_voice_brandname_fixed_installation(ticket: Ticket) -> bool:
+    """Whether a South Voice Brandname ticket has the fixed Tuyết Nhung route."""
+    if normalize(ticket.service_type or ticket.service) != normalize("Voice Brandname"):
+        return False
+    installation = unaccent(ticket.installation_type)
+    return any(
+        marker in installation
+        for marker in ("tam dung", "huy", "khoi phuc so thue bao")
+    )
+
+
+def match_rule(
+    rules: list[ServiceRule], ticket: Ticket, *, south_special_rules: bool = False,
+) -> ServiceRule:
     service = normalize(ticket.service_type or ticket.service)
     candidates = [rule for rule in rules if normalize(rule.service) == service]
     matches = [rule for rule in candidates if _condition_matches(rule, ticket)]
+    if (
+        not matches
+        and south_special_rules
+        and is_south_voice_brandname_fixed_installation(ticket)
+    ):
+        # The South fixed-installation exception is independent of VIP status;
+        # use its configured supervision row for points and Sheet metadata.
+        matches = [
+            rule for rule in candidates
+            if "giam sat" in unaccent(rule.condition)
+        ][:1]
     if not matches:
         raise RuleError(
             f"Không tìm thấy quy tắc cho dịch vụ={ticket.service_type or ticket.service!r}, "

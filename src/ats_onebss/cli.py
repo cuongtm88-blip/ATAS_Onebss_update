@@ -33,6 +33,7 @@ from .rules import (
     RuleError,
     canonical_member_name,
     eligible_members,
+    is_south_voice_brandname_fixed_installation,
     load_project_rules,
     load_rules,
     load_score_member_names,
@@ -298,8 +299,34 @@ async def collect_plan(
                 manual_assignees[ticket.key] = canonical_assignee
                 valid.append(ticket)
                 continue
+            fixed_brandname_suspend = (
+                config.south_special_rules
+                and is_south_voice_brandname_fixed_installation(ticket)
+            )
+            if fixed_brandname_suspend:
+                fixed_name = canonical_member_name(
+                    rules, "Trần Thị Tuyết Nhung"
+                )
+                if normalize(fixed_name) in excluded:
+                    raise RuleError(
+                        f"Người nhận cố định ({fixed_name}) đang nghỉ phép"
+                    )
+                valid.append(ticket)
+                continue
+            if (
+                normalize(ticket.service_type or ticket.service)
+                == normalize("Voice Brandname")
+                and not ticket.vip_status
+            ):
+                raise RuleError(
+                    "Không đọc được VIP xử lý cho phiếu Voice Brandname; "
+                    "giữ phiếu chưa giao và sẽ thử lại ở chu kỳ sau."
+                )
             try:
-                current_rule = match_rule(rules, ticket)
+                current_rule = match_rule(
+                    rules, ticket,
+                    south_special_rules=config.south_special_rules,
+                )
             except RuleError:
                 current_rule = None
             project_applies = (
@@ -324,7 +351,10 @@ async def collect_plan(
                 prior_assignees = None
             if prior_assignees:
                 try:
-                    rule = match_rule(rules, ticket)
+                    rule = match_rule(
+                        rules, ticket,
+                        south_special_rules=config.south_special_rules,
+                    )
                 except RuleError:
                     # Historical services may no longer exist in the current
                     # Excel file, but their Sheet assignee remains authoritative.
@@ -354,7 +384,10 @@ async def collect_plan(
                                 )
                             member_group(rules, canonical, rule)
             else:
-                rule = match_rule(rules, ticket)
+                rule = match_rule(
+                    rules, ticket,
+                    south_special_rules=config.south_special_rules,
+                )
                 voice_mode = voice_brandname_mode(rule, ticket)
                 if voice_mode or not rule.write_to_sheet:
                     eligible_members(

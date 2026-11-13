@@ -7,6 +7,7 @@ from .rules import (
     RuleError,
     canonical_member_name,
     eligible_members,
+    is_south_voice_brandname_fixed_installation,
     member_group,
     member_score_key,
     match_project_rule,
@@ -197,7 +198,9 @@ def plan_assignments(
             if ticket.key in completed:
                 continue
             try:
-                ticket_rule = match_rule(rules, ticket)
+                ticket_rule = match_rule(
+                    rules, ticket, south_special_rules=south_special_rules
+                )
             except RuleError:
                 continue
             if normalize(ticket_rule.sheet_service or ticket_rule.service) != normalize("SIP"):
@@ -217,8 +220,15 @@ def plan_assignments(
     # have a successful assignment saved locally.
     sheet_cohort_pins: dict[str, str] = {}
     for ticket in tickets:
+        if (
+            south_special_rules
+            and is_south_voice_brandname_fixed_installation(ticket)
+        ):
+            continue
         try:
-            seed_rule = match_rule(rules, ticket)
+            seed_rule = match_rule(
+                rules, ticket, south_special_rules=south_special_rules
+            )
         except RuleError:
             seed_rule = None
             is_giam_sat = (
@@ -258,8 +268,21 @@ def plan_assignments(
         # row, even when it was already present on this month's tab. Prior-month
         # history is also a replay and must not increase this month's score.
         in_sheet_history = bool(preferred) or on_current_sheet
+        fixed_brandname_suspend = (
+            south_special_rules
+            and is_south_voice_brandname_fixed_installation(ticket)
+        )
+        if (
+            normalize(ticket.service_type or ticket.service)
+            == normalize("Voice Brandname")
+            and not ticket.vip_status
+            and not fixed_brandname_suspend
+        ):
+            continue
         try:
-            rule = match_rule(rules, ticket)
+            rule = match_rule(
+                rules, ticket, south_special_rules=south_special_rules
+            )
         except RuleError:
             if not preferred and not manual_assignee:
                 raise
@@ -274,13 +297,16 @@ def plan_assignments(
         # the current Excel rule and remains absent from Sheet history.
         if not rule.write_to_sheet:
             preferred = None
-        elif preferred and not manual_assignee:
+        elif preferred and not manual_assignee and not fixed_brandname_suspend:
             preferred = tuple(
                 canonical_member_name(rules, assignee) for assignee in preferred
             )
             if any(normalize(assignee) in excluded for assignee in preferred):
                 continue
-        voice_mode = voice_brandname_mode(rule, ticket)
+        voice_mode = (
+            "" if fixed_brandname_suspend
+            else voice_brandname_mode(rule, ticket)
+        )
         service_label = normalize(ticket.service_type or ticket.service)
         installation = unaccent(ticket.installation_type)
         fixed_sip_trunk = south_special_rules and (
@@ -289,12 +315,6 @@ def plan_assignments(
         ) and any(marker in installation for marker in (
             "khoa mo dich vu ims", "mo tam dung su dung ims",
         ))
-        fixed_brandname_suspend = south_special_rules and (
-            service_label == normalize("Voice Brandname")
-            and any(marker in installation for marker in (
-                "tam dung", "huy", "khoi phuc so thue bao",
-            ))
-        )
         fixed_sip_batch = south_special_rules and sip_ranks.get(ticket.key, 31) <= 30
         # The current VIP state is stronger than Sheet history for supervision.
         # A returned Giam sat ticket must follow the matched regional rule.

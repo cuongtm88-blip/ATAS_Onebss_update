@@ -2,14 +2,19 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from ats_onebss.models import Member, ServiceRule, Ticket
 from ats_onebss.planner import plan_assignments
 from ats_onebss.rules import (
     SOUTH_PROJECT_GROUP_DVS,
+    RuleError,
     load_project_rules,
     load_rules,
     match_project_rule,
+    match_rule,
 )
+from ats_onebss.text import ticket_identity
 from ats_onebss import gui
 from ats_onebss.gui import install_rules_file
 
@@ -122,6 +127,30 @@ def test_south_voice_brandname_suspend_cancel_restore_go_to_tuyet_nhung():
         planning_day="2026-10-14",
     )
     assert result[0].assignees == ("Trần Thị Tuyết Nhung",)
+
+
+def test_south_voice_brandname_fixed_installation_does_not_need_vip_value():
+    ticket = Ticket(
+        "GD", "TB", "Voice Brandname", service_type="Voice Brandname",
+        installation_type="Tạm dừng/Hủy/Khôi phục số thuê bao",
+    )
+    result = plan_assignments(
+        [ticket], SOUTH_RULES,
+        preferred_assignees={ticket_identity("GD", "TB"): ("Nguyễn Tú Uyên",)},
+        excluded_members=("Nguyễn Tú Uyên",),
+        south_special_rules=True,
+        planning_day="2026-11-13",
+    )
+
+    assert result[0].assignees == ("Trần Thị Tuyết Nhung",)
+    assert result[0].points == Decimal("20")
+
+
+def test_south_voice_brandname_empty_vip_does_not_match_regular_route():
+    ticket = Ticket("GD", "TB", "Voice Brandname", service_type="Voice Brandname")
+
+    with pytest.raises(RuleError, match="Không tìm thấy quy tắc"):
+        match_rule(SOUTH_RULES, ticket, south_special_rules=True)
 
 
 def test_south_group_dv_different_services_at_same_address_share_owner():

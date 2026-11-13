@@ -2287,6 +2287,20 @@ class GoogleSheetClient:
             self.session.config.sheet_name_template,
             self.session.config.timezone,
         )
+        current_month = re.fullmatch(
+            r"tháng\s+(\d{1,2})/(\d{4})", normalize(current_name)
+        )
+        if current_month:
+            current_key = (int(current_month.group(2)), int(current_month.group(1)))
+            monthly_names = [
+                name
+                for name in monthly_names
+                if (match := re.fullmatch(
+                    r"tháng\s+(\d{1,2})/(\d{4})", normalize(name)
+                ))
+                and 1 <= int(match.group(1)) <= 12
+                and (int(match.group(2)), int(match.group(1))) <= current_key
+            ]
         if not any(normalize(name) == normalize(current_name) for name in monthly_names):
             monthly_names.append(current_name)
 

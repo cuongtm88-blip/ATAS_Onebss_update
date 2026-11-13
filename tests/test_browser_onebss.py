@@ -8,6 +8,7 @@ from ats_onebss.browser import (
     BrowserSession,
     OneBSSClient,
     _contract_type_from_api,
+    _dismiss_task_menu_if_open,
     _installation_type_from_api,
     _province_from_address,
     _project_details_from_api,
@@ -15,6 +16,46 @@ from ats_onebss.browser import (
     _ticket_metadata_from_api,
 )
 from ats_onebss.models import ProjectRoute, ProjectRule, Ticket
+
+
+def test_assignment_retry_does_not_escape_when_task_menu_is_closed():
+    class Locator:
+        async def count(self):
+            return 0
+
+    class Keyboard:
+        press = AsyncMock()
+
+    async def run():
+        page = SimpleNamespace(locator=lambda _selector: Locator(), keyboard=Keyboard())
+        assert not await _dismiss_task_menu_if_open(page)
+        page.keyboard.press.assert_not_awaited()
+
+    asyncio.run(run())
+
+
+def test_assignment_retry_escapes_only_an_open_task_menu():
+    class Menu:
+        async def is_visible(self):
+            return True
+
+        async def wait_for(self, *, state, timeout):
+            assert (state, timeout) == ("hidden", 1_000)
+
+    class Portal:
+        async def count(self):
+            return 1
+
+        def nth(self, _index):
+            return Menu()
+
+    async def run():
+        keyboard = SimpleNamespace(press=AsyncMock())
+        page = SimpleNamespace(locator=lambda _selector: Portal(), keyboard=keyboard)
+        assert await _dismiss_task_menu_if_open(page)
+        keyboard.press.assert_awaited_once_with("Escape")
+
+    asyncio.run(run())
 
 
 def test_detail_row_identity_requires_exact_transaction_and_subscriber_ids():

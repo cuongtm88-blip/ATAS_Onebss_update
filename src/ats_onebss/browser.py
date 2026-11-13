@@ -847,6 +847,23 @@ async def _visible_employee_grid(page: Page, timeout_ms: int) -> tuple[Locator, 
     raise RuntimeError("Không tìm thấy bảng nhân viên đang hiển thị")
 
 
+async def _dismiss_task_menu_if_open(page: Page) -> bool:
+    """Dismiss only an open task picker, never the assignment dialog itself."""
+    portal = page.locator(
+        ".vue-treeselect__portal-target.vue-treeselect--open"
+    )
+    for index in range(await portal.count()):
+        menu = portal.nth(index)
+        if await menu.is_visible():
+            await page.keyboard.press("Escape")
+            try:
+                await menu.wait_for(state="hidden", timeout=1_000)
+            except Exception:
+                pass
+            return True
+    return False
+
+
 async def _visible_assigned_grid(dialog: Locator, timeout_ms: int) -> Locator:
     """Find the lower grid: Danh sách nhân viên đã giao nhiệm vụ."""
     deadline = asyncio.get_running_loop().time() + timeout_ms / 1000
@@ -1852,7 +1869,7 @@ class OneBSSClient:
                 raise RuntimeError("Nhiệm vụ chưa xuất hiện trên dòng nhân viên")
             except Exception as error:
                 last_error = error
-                await self.page.keyboard.press("Escape")
+                await _dismiss_task_menu_if_open(self.page)
                 await self.page.wait_for_timeout(500)
         raise AssignmentPopupError(
             f"Không chọn được nhiệm vụ cho {assignee} sau 3 lần thử: {last_error}"
@@ -2187,7 +2204,9 @@ class OneBSSClient:
                         # OneBSS discards unsaved task state when the row is
                         # rebuilt. Stop rather than silently saving no task.
                         break
-                    await self.page.keyboard.press("Escape")
+                    # Escape with no open tree menu closes the entire OneBSS
+                    # assignment dialog. Only dismiss the menu if it is open.
+                    await _dismiss_task_menu_if_open(self.page)
                     await self.page.wait_for_timeout(500)
             if last_error is not None:
                 raise AssignmentPopupError(

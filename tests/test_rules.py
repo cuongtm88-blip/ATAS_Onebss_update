@@ -258,29 +258,30 @@ def test_voice_brandname_unknown_vip_is_rejected():
         eligible_members(rule, ticket, False)
 
 
-def test_score_member_names_exclude_no_score_dispatcher():
+def test_current_score_member_names_include_configured_dispatcher_services():
     rules_file = Path(__file__).parents[1] / "Giao phiếu.xlsx"
     names = load_score_member_names(rules_file)
-    assert len(names) == 17
-    assert names[0] == "Lương Tuấn Thanh"
-    assert not any("Cường" in name or "Cường" in name for name in names)
+    assert len(names) == 18
+    assert any("Cường" in name or "Cường" in name for name in names)
 
 
 def test_current_workbook_has_requested_fourteen_and_four_member_groups():
     root = Path(__file__).parents[1]
     rules_file = root / "Giao phiếu.xlsx"
     rules = load_rules(rules_file)
-    all_members = {member.name for rule in rules for member in rule.members}
     grouped = {
-        group: {name for name in all_members if member_group(rules, name) == group}
-        for group in {member_group(rules, name) for name in all_members}
+        group: {
+            member.name for rule in rules for member in rule.members
+            if member.group == group
+        }
+        for group in {member.group for rule in rules for member in rule.members}
     }
     group_1 = next(values for key, values in grouped.items() if "1" in key)
     group_2 = next(values for key, values in grouped.items() if "2" in key)
     assert group_1 == {
-        "Lương Tuấn Thanh", "Lý Thị Bích Hằng", "Tạ Lê Hoa", "Lê Anh Tuấn",
+        "Lý Thị Bích Hằng", "Tạ Lê Hoa", "Lê Anh Tuấn",
         "Vũ Thế Ninh", "Đặng Văn Minh", "Đào Anh Vũ", "Đoàn Hải Hà",
-        "Nguyễn Duy Thành", "Ngô Thị Minh Phương", "Lê Đức Vinh",
+        "Nguyễn Duy Thành", "Ngô Thị Minh Phương", "Lê Đức Vinh", "Lê Đức Tuấn",
         "Trâ\u0300n Ma\u0323nh Cươ\u0300ng", "Nguyễn Hoàng Dương", "Trần Thị Thu Hằng",
     }
     assert group_2 == {
@@ -300,8 +301,8 @@ def test_current_config_has_requested_member_target_ratios():
     }
 
 
-def test_demo2_percentage_workbook_expands_service_map_and_preserves_api_flags():
-    workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
+def test_current_percentage_workbook_expands_service_map_and_preserves_api_flags():
+    workbook = Path(__file__).parents[1] / "Giao phiếu.xlsx"
     rules = load_rules(workbook)
 
     assert len(rules) == 69
@@ -317,8 +318,8 @@ def test_demo2_percentage_workbook_expands_service_map_and_preserves_api_flags()
     assert fiber.send_to_api is True
 
 
-def test_demo2_service_map_uses_channel_and_installation_conditions():
-    workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
+def test_current_service_map_uses_channel_and_installation_conditions():
+    workbook = Path(__file__).parents[1] / "Giao phiếu.xlsx"
     rules = load_rules(workbook)
 
     local = match_rule(rules, Ticket("GD1", "TB1", "MegaWan", channel_type="Nội tỉnh"))
@@ -366,8 +367,8 @@ def test_demo2_service_map_uses_channel_and_installation_conditions():
     assert [member.name for member in voice_giam_sat.members] == ["Lê Đức Tuấn"]
 
 
-def test_demo2_percentage_rows_sum_to_100_and_keep_fixed_group_roster():
-    workbook = Path(__file__).parents[1] / "Giao phiếu_demo2.xlsx"
+def test_current_percentage_rows_sum_to_100_and_keep_fixed_group_roster():
+    workbook = Path(__file__).parents[1] / "Giao phiếu.xlsx"
     rules = load_rules(workbook)
     names = load_score_member_names(workbook)
     group_members = {

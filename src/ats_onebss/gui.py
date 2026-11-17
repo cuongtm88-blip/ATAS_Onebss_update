@@ -104,18 +104,20 @@ RESOURCE_FILES = (
     "regions.toml",
     "config.toml",
     "project_rules.toml",
-    "Giao phiếu_demo2.xlsx",
+    "Giao phiếu.xlsx",
     "attendance_calendar.json",
 )
 PACKAGED_RESOURCE_ALIASES = {
     # Keep non-ASCII workbook names out of the signed macOS bundle. macOS
     # normalizes those names while extracting ZIPs, which invalidates the
     # ad-hoc resource seal. The runtime copy keeps the existing public name.
-    "Giao phiếu_demo2.xlsx": "assignment_rules.xlsx",
+    "Giao phiếu.xlsx": "assignment_rules.xlsx",
 }
 PREVIOUS_BUNDLED_RULES_SHA256 = {
     # Workbook bundled by 0.9.75, used to safely migrate default installs.
     "35758b27561e4d8617dbabfc4f6eb11c43c0029a8f95d2e5d1875d7dfa415f46",
+    # Workbook bundled by 0.9.86 under the legacy demo2 filename.
+    "ad727fefa63633abd6ea6833aa55451b3733b4010ec2ecbf5eedee50d125e4ae",
 }
 
 
@@ -253,7 +255,7 @@ def editable_rules_file() -> Path | None:
     app_bundle = next((parent for parent in executable.parents if parent.suffix == ".app"), None)
     if app_bundle is None:
         return None
-    candidate = app_bundle.parent.parent / "Giao phiếu_demo2.xlsx"
+    candidate = app_bundle.parent.parent / "Giao phiếu.xlsx"
     return candidate if candidate.is_file() else None
 
 
@@ -264,7 +266,7 @@ def prepare_runtime_root() -> Path:
 
     target = user_data_root()
     target.mkdir(parents=True, exist_ok=True)
-    runtime_rules = target / "Giao phiếu_demo2.xlsx"
+    runtime_rules = target / "Giao phiếu.xlsx"
     bundled_rules_marker = target / ".bundled_rules_sha256"
     for relative in RESOURCE_FILES:
         source_file = source / relative
@@ -301,6 +303,25 @@ def prepare_runtime_root() -> Path:
                 bundled_rules_marker.write_text(
                     hashlib.sha256(source_file.read_bytes()).hexdigest(),
                     encoding="ascii",
+                )
+    # Older releases configured the legacy demo2 filename. Preserve that
+    # workbook as user data, but migrate the active config to the canonical
+    # filename so future packages never recreate demo2.
+    legacy_rules = target / "Giao phiếu_demo2.xlsx"
+    config_path = target / "config.toml"
+    if config_path.is_file():
+        config_text = config_path.read_text(encoding="utf-8-sig")
+        if 'file = "Giao phiếu_demo2.xlsx"' in config_text:
+            if not runtime_rules.is_file() and legacy_rules.is_file():
+                shutil.copy2(legacy_rules, runtime_rules)
+            if runtime_rules.is_file():
+                config_path.write_text(
+                    config_text.replace(
+                        'file = "Giao phiếu_demo2.xlsx"',
+                        'file = "Giao phiếu.xlsx"',
+                        1,
+                    ),
+                    encoding="utf-8",
                 )
     sync_missing_project_rules(
         target / "project_rules.toml", source / "project_rules.toml"

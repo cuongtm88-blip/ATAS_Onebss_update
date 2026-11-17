@@ -1351,7 +1351,7 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument(
         "--region", metavar="MÃ_MIỀN",
-        help="Chọn cấu hình miền, ví dụ north, central hoặc south",
+        help="Chọn cấu hình Miền Bắc (north)",
     )
     result.add_argument(
         "--poll-interval-minutes", type=int, metavar="PHÚT",

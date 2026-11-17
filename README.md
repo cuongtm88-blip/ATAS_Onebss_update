@@ -112,7 +112,7 @@ khi bấm nút `Đăng nhập`; nếu chưa lưu thông tin hoặc chưa bật T
 đăng nhập thủ công như trước.
 
 Công cụ tự động đọc các phiếu đang hiển thị trên OneBSS, đối chiếu quy tắc trong
-`Giao phiếu_demo2.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
+`Giao phiếu.xlsx`, cân bằng điểm giữa thành viên, giao theo lô, ghi tiếp dữ liệu vào
 Google Sheet theo tháng giao phiếu, rồi bấm `Gửi SMS`.
 
 Khi cần đồng bộ song song sang API nhận phiếu, mở tab `API nhận phiếu`, nhập
@@ -291,9 +291,7 @@ uv run ats-onebss-gui
 
 Trong giao diện:
 
-1. Chọn miền hoạt động. Hiện `Miền Bắc` đã được bật với toàn bộ cấu hình hiện
-   tại; `Miền Trung` và `Miền Nam` được hiển thị nhưng khóa chạy cho đến khi có
-   file nhân sự và quy tắc riêng.
+1. Chọn miền hoạt động. Bản trong thư mục này chỉ cấu hình Miền Bắc.
 2. Chọn nhân sự tạm nghỉ nếu có. Danh sách này được lưu riêng cho từng miền.
 3. Bấm `Đăng nhập` ở lần đầu, đăng nhập OneBSS và Google rồi bấm
    `Hoàn tất đăng nhập`.
@@ -323,9 +321,8 @@ chọn rõ Miền Bắc bằng:
 uv run ats-onebss --region north run --yes
 ```
 
-Miền Trung và Miền Nam dùng các thư mục cấu hình riêng được khai báo sẵn trong
-`regions.toml`, không dùng chung browser profile, SQLite, Google Sheet hoặc file
-quy tắc với Miền Bắc khi được kích hoạt sau này.
+Thư mục này là mã nguồn riêng của Miền Bắc. Cấu hình, workbook quy tắc, lịch,
+database và hồ sơ trình duyệt của bản Miền Bắc được quản lý từ đây.
 
 Luôn tạo bản xem trước trước:
 
@@ -486,6 +483,6 @@ Trên Windows, chạy PowerShell:
 ```
 
 Kết quả nằm trong `dist/ATS-OneBSS`. Khi chuyển máy, sao chép cả thư mục này cùng
-  `config.toml`, `project_rules.toml` và `Giao phiếu_demo2.xlsx`. Máy đích cần cài Google Chrome, sau đó chạy
+  `config.toml`, `project_rules.toml` và `Giao phiếu.xlsx`. Máy đích cần cài Google Chrome, sau đó chạy
 `ATS-OneBSS login` một lần để đăng nhập OneBSS và Google. Không sao chép
 `.browser-profile` vì phiên đăng nhập thuộc riêng từng máy/người dùng.

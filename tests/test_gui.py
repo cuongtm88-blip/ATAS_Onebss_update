@@ -157,9 +157,9 @@ def test_prepare_runtime_root_refreshes_newer_editable_rules(monkeypatch, tmp_pa
     for relative in gui.RESOURCE_FILES:
         (resources / relative).write_text("bundled", encoding="utf-8")
     runtime.mkdir()
-    runtime_rules = runtime / "Giao phiếu_demo2.xlsx"
+    runtime_rules = runtime / "Giao phiếu.xlsx"
     runtime_rules.write_text("old runtime", encoding="utf-8")
-    editable_rules = project / "Giao phiếu_demo2.xlsx"
+    editable_rules = project / "Giao phiếu.xlsx"
     editable_rules.parent.mkdir(parents=True, exist_ok=True)
     editable_rules.write_text("new editable", encoding="utf-8")
     os.utime(runtime_rules, (1, 1))
@@ -173,7 +173,7 @@ def test_prepare_runtime_root_refreshes_newer_editable_rules(monkeypatch, tmp_pa
     assert runtime_rules.read_text(encoding="utf-8") == "new editable"
 
 
-def test_prepare_runtime_root_copies_ascii_packaged_rules_to_legacy_name(
+def test_prepare_runtime_root_copies_ascii_packaged_rules_to_canonical_name(
     monkeypatch, tmp_path
 ):
     project = tmp_path / "project"
@@ -184,7 +184,7 @@ def test_prepare_runtime_root_copies_ascii_packaged_rules_to_legacy_name(
     executable.touch()
     resources.mkdir()
     for relative in gui.RESOURCE_FILES:
-        if relative != "Giao phiếu_demo2.xlsx":
+        if relative != "Giao phiếu.xlsx":
             (resources / relative).write_text("bundled", encoding="utf-8")
     (resources / "assignment_rules.xlsx").write_text("ascii bundled", encoding="utf-8")
     monkeypatch.setattr(gui.sys, "frozen", True, raising=False)
@@ -193,7 +193,7 @@ def test_prepare_runtime_root_copies_ascii_packaged_rules_to_legacy_name(
     monkeypatch.setattr(gui, "user_data_root", lambda: runtime)
 
     assert gui.prepare_runtime_root() == runtime
-    assert (runtime / "Giao phiếu_demo2.xlsx").read_text(encoding="utf-8") == "ascii bundled"
+    assert (runtime / "Giao phiếu.xlsx").read_text(encoding="utf-8") == "ascii bundled"
     assert (runtime / ".bundled_rules_sha256").read_text(encoding="ascii") == hashlib.sha256(
         b"ascii bundled"
     ).hexdigest()
@@ -210,12 +210,12 @@ def test_prepare_runtime_root_migrates_old_bundle_but_preserves_custom_rules(
     executable.touch()
     resources.mkdir()
     for relative in gui.RESOURCE_FILES:
-        if relative != "Giao phiếu_demo2.xlsx":
+        if relative != "Giao phiếu.xlsx":
             (resources / relative).write_text("bundled", encoding="utf-8")
     new_rules = resources / "assignment_rules.xlsx"
     new_rules.write_bytes(b"new bundled rules")
     runtime.mkdir()
-    runtime_rules = runtime / "Giao phiếu_demo2.xlsx"
+    runtime_rules = runtime / "Giao phiếu.xlsx"
     runtime_rules.write_bytes(b"old bundled rules")
     monkeypatch.setattr(gui, "PREVIOUS_BUNDLED_RULES_SHA256", {
         hashlib.sha256(b"old bundled rules").hexdigest()
@@ -335,13 +335,42 @@ def test_install_rules_file_validates_replaces_and_keeps_backup(tmp_path):
 
 
 def test_install_rules_file_accepts_group_percentage_workbook(tmp_path):
-    source = gui.resource_root() / "Giao phiếu_demo2.xlsx"
-    target = tmp_path / "Giao phiếu_demo2.xlsx"
+    source = gui.resource_root() / "Giao phiếu.xlsx"
+    target = tmp_path / "Giao phiếu.xlsx"
 
     backup = gui.install_rules_file(source, target)
 
     assert backup is None
     assert len(gui.load_rules(target)) == 69
+
+
+def test_prepare_runtime_root_migrates_legacy_config_without_deleting_legacy_workbook(
+    monkeypatch, tmp_path
+):
+    project = tmp_path / "project"
+    resources = tmp_path / "resources"
+    runtime = tmp_path / "runtime"
+    executable = project / "dist" / "ATS-OneBSS.app" / "Contents" / "MacOS" / "ATS-OneBSS"
+    executable.parent.mkdir(parents=True)
+    executable.touch()
+    resources.mkdir()
+    for relative in gui.RESOURCE_FILES:
+        (resources / relative).write_text("bundled", encoding="utf-8")
+    runtime.mkdir()
+    config = runtime / "config.toml"
+    config.write_text('[rules]\nfile = "Giao phiếu_demo2.xlsx"\n', encoding="utf-8")
+    legacy = runtime / "Giao phiếu_demo2.xlsx"
+    legacy.write_bytes(b"user workbook")
+    monkeypatch.setattr(gui.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(gui.sys, "executable", str(executable))
+    monkeypatch.setattr(gui.sys, "_MEIPASS", str(resources), raising=False)
+    monkeypatch.setattr(gui, "user_data_root", lambda: runtime)
+
+    gui.prepare_runtime_root()
+
+    assert 'file = "Giao phiếu.xlsx"' in config.read_text(encoding="utf-8")
+    assert legacy.read_bytes() == b"user workbook"
+    assert (runtime / "Giao phiếu.xlsx").read_text(encoding="utf-8") == "bundled"
 
 
 def test_install_rules_file_rejects_non_excel_file(tmp_path):

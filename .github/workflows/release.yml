@@ -44,6 +44,8 @@ jobs:
           codesign --verify --deep --strict "$extracted"
           test -f "$extracted/Contents/Frameworks/assignment_rules.xlsx"
           test -f "$extracted/Contents/Frameworks/project_rules.toml"
+          ! find "$extracted" -iname 'Giao phiếu_demo2.xlsx' -print -quit | grep -q .
+          grep -q '^file = "Giao phiếu.xlsx"$' "$extracted/Contents/Frameworks/config.toml"
           grep -q '^read_batch_size = 20$' "$extracted/Contents/Frameworks/config.toml"
           grep -q '^read_batch_threshold = 50$' "$extracted/Contents/Frameworks/config.toml"
           grep -q 'Cục Tin Học Và Thống Kê Tài Chính' "$extracted/Contents/Frameworks/project_rules.toml"

@@ -10,7 +10,7 @@ read_batch_threshold = 50
 timeout_ms = 30000
 
 [rules]
-file = "Giao phiếu_demo2.xlsx"
+file = "Giao phiếu.xlsx"
 projects_file = "project_rules.toml"
 # Chính và Phụ đều là nhân sự hợp lệ; không áp dụng quota theo vai trò.
 use_backup_members = true

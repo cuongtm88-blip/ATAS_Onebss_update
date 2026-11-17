@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## Phạm vi thư mục
+
+Đây là thư mục nguồn chuẩn và độc lập cho app Miền Bắc. Mọi chỉnh sửa, kiểm
+tra và đóng gói app Miền Bắc phải thực hiện từ thư mục này. Giữ cấu hình và dữ
+liệu của Miền Bắc tại đây; không lấy mã nguồn hoặc dữ liệu của miền khác làm
+đầu vào cho thay đổi Miền Bắc.
+
 ## 1. Mục tiêu
 
 File này quy định cách AI coding agent làm việc trong repository này.

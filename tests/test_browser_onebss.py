@@ -1,4 +1,5 @@
 import asyncio
+import ats_onebss.browser as browser_module
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -17,6 +18,7 @@ from ats_onebss.browser import (
     _wait_for_onebss_overlay_clear,
 )
 from ats_onebss.models import ProjectRoute, ProjectRule, ServiceRule, Ticket
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 
 def test_detail_row_identity_requires_exact_transaction_and_subscriber_ids():
@@ -329,12 +331,61 @@ def test_set_hidden_checkbox_waits_for_async_syncfusion_state():
 
 
 def test_onebss_overlay_wait_checks_interaction_blocking_visibility():
-    page = SimpleNamespace(wait_for_function=AsyncMock())
+    page = SimpleNamespace(
+        bring_to_front=AsyncMock(),
+        wait_for_function=AsyncMock(),
+    )
     asyncio.run(_wait_for_onebss_overlay_clear(page, 12_000))
+    page.bring_to_front.assert_awaited_once()
     script, = page.wait_for_function.await_args.args
     assert "pointerEvents !== 'none'" in script
     assert "rect.width > 0" in script
     assert page.wait_for_function.await_args.kwargs["timeout"] == 12_000
+
+
+def test_assignment_filters_reload_once_after_stuck_overlay(monkeypatch):
+    wait_calls = []
+
+    async def wait_overlay(_page, _timeout):
+        wait_calls.append(True)
+        if len(wait_calls) == 1:
+            raise PlaywrightTimeoutError("overlay stayed visible")
+
+    class Checkbox:
+        async def count(self):
+            return 0
+
+    class Panel:
+        @property
+        def first(self):
+            return self
+
+        def filter(self, **_kwargs):
+            return self
+
+        def locator(self, selector):
+            assert selector == "#chkLoc"
+            return Checkbox()
+
+    page = SimpleNamespace(
+        reload=AsyncMock(),
+        wait_for_selector=AsyncMock(),
+        locator=lambda _selector: Panel(),
+    )
+    config = SimpleNamespace(timeout_ms=100)
+    client = OneBSSClient(SimpleNamespace(config=config))
+    client.page = page
+    monkeypatch.setattr(browser_module, "_wait_for_onebss_overlay_clear", wait_overlay)
+
+    asyncio.run(client.ensure_assignment_filters("Tất cả"))
+
+    assert len(wait_calls) == 2
+    page.reload.assert_awaited_once_with(
+        wait_until="domcontentloaded", timeout=15_000
+    )
+    page.wait_for_selector.assert_awaited_once_with(
+        "#frmGiaoViecVIP", timeout=15_000
+    )
 
 
 def test_reads_contract_type_from_raw_onebss_response():

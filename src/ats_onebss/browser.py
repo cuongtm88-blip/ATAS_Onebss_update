@@ -18,7 +18,13 @@ from pathlib import Path
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from playwright.async_api import BrowserContext, Locator, Page, async_playwright
+from playwright.async_api import (
+    BrowserContext,
+    Locator,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+    async_playwright,
+)
 
 from .calendar_sync import HEADER
 from .config import Config
@@ -582,6 +588,9 @@ async def _set_hidden_checkbox(checkbox: Locator, checked: bool) -> None:
 
 async def _wait_for_onebss_overlay_clear(page: Page, timeout_ms: int) -> None:
     """Wait until OneBSS's blocking overlay no longer intercepts UI actions."""
+    # Sheet writes can bring another tab to the foreground. OneBSS throttles
+    # background tabs, so restore this tab before waiting for its loading mask.
+    await page.bring_to_front()
     await page.wait_for_function(
         """() => !Array.from(document.querySelectorAll('.overlay-common.show'))
             .some(element => {
@@ -1032,7 +1041,6 @@ class OneBSSClient:
             wait_until="domcontentloaded", timeout=timeout_ms
         )
         await self.page.wait_for_selector("#frmGiaoViecVIP", timeout=timeout_ms)
-        await _wait_for_onebss_overlay_clear(self.page, timeout_ms)
         await self.page.wait_for_timeout(1_000)
         await self.ensure_unassigned_filters()
         await self.refresh_tickets()
@@ -1131,9 +1139,26 @@ class OneBSSClient:
     async def ensure_assignment_filters(self, assignment_status: str) -> None:
         """Disable employee filtering and select Chưa giao/Tất cả."""
         assert self.page
-        await _wait_for_onebss_overlay_clear(
-            self.page, self.session.config.timeout_ms
-        )
+        try:
+            await _wait_for_onebss_overlay_clear(
+                self.page, self.session.config.timeout_ms
+            )
+        except PlaywrightTimeoutError:
+            # A OneBSS loading overlay can become stale after another browser
+            # tab was foregrounded during Sheet sync. Reload once, then retry;
+            # never click through a still-blocking overlay.
+            print("Lớp phủ OneBSS chưa đóng; đang tải lại tab trước khi lọc phiếu...")
+            await self.page.reload(
+                wait_until="domcontentloaded",
+                timeout=max(15_000, self.session.config.timeout_ms),
+            )
+            await self.page.wait_for_selector(
+                "#frmGiaoViecVIP",
+                timeout=max(15_000, self.session.config.timeout_ms),
+            )
+            await _wait_for_onebss_overlay_clear(
+                self.page, self.session.config.timeout_ms
+            )
         summary = self.page.locator("#frmGiaoViecVIP .form-control.bold").filter(
             has_text="Lọc theo nhân viên"
         ).first

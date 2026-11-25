@@ -1009,10 +1009,17 @@ async def recover_browser(
     sheet.page = None
     timeout_ms = max(15_000, config.timeout_ms)
     try:
-        await sheet.open()
+        try:
+            await sheet.open()
+        except Exception as sheet_error:
+            # A durable Sheet outbox must not make OneBSS browser recovery fail.
+            # The next cycle retries the pending rows independently.
+            print(
+                "Chưa mở lại được tab Google Sheet; dữ liệu chờ vẫn được giữ "
+                f"trong sổ cục bộ: {sheet_error}"
+            )
         await onebss.open()
         await onebss.page.wait_for_selector("#frmGiaoViecVIP", timeout=timeout_ms)
-        await sync_pending(config, sheet, ledger, dashboard)
         await onebss.ensure_unassigned_filters()
         await onebss.refresh_tickets()
     except Exception as restart_error:

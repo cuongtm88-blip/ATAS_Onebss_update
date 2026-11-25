@@ -12,6 +12,7 @@ from ats_onebss.browser import (
     _is_sheet_data_row,
     _sheet_subscriber_key,
     _sheet_text_input,
+    _paste_text_from_clipboard,
 )
 from ats_onebss.models import Assignment, Ticket
 from ats_onebss.rules import member_score_key
@@ -22,6 +23,35 @@ def test_sheet_subscriber_key_treats_text_marker_as_blank():
     assert _sheet_subscriber_key("'") == ""
     assert _sheet_subscriber_key("'02433215206") == "02433215206"
     assert _sheet_subscriber_key("02433215206") == "02433215206"
+
+
+def test_paste_text_brings_sheets_to_front_and_verifies_clipboard():
+    calls = []
+    clipboard = {"text": ""}
+
+    class Keyboard:
+        async def press(self, key):
+            calls.append(("press", key))
+
+    class Page:
+        keyboard = Keyboard()
+
+        async def bring_to_front(self):
+            calls.append(("front",))
+
+        async def evaluate(self, script, value=None):
+            if "writeText" in script:
+                clipboard["text"] = value
+                calls.append(("write", value))
+                return
+            if "readText" in script:
+                calls.append(("read",))
+                return clipboard["text"]
+            raise AssertionError(script)
+
+    asyncio.run(_paste_text_from_clipboard(Page(), "GD1\tTB1\nGD2\tTB2"))
+    assert calls[0] == ("front",)
+    assert calls[-1] == ("press", "Meta+V")
 
 
 def test_sheet_assignment_key_ignores_sheet_text_formatting_differences():

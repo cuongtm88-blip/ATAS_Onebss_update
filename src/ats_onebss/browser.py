@@ -560,13 +560,50 @@ async def _visible(locator: Locator, timeout_ms: int = 30_000) -> Locator:
 
 
 async def _set_hidden_checkbox(checkbox: Locator, checked: bool) -> None:
-    """Toggle a Syncfusion checkbox whose native input is off-screen."""
+    """Toggle a Syncfusion checkbox and allow Vue to commit its new state."""
     await checkbox.evaluate(
         "(element, wanted) => { if (element.checked !== wanted) element.click(); }",
         checked,
     )
-    if await checkbox.is_checked() != checked:
-        raise RuntimeError("OneBSS không cập nhật trạng thái checkbox")
+    deadline = asyncio.get_running_loop().time() + 3
+    while asyncio.get_running_loop().time() < deadline:
+        try:
+            if await checkbox.is_checked() == checked:
+                return
+        except Exception:
+            # Syncfusion may detach and recreate the row while processing the
+            # checkbox event. The locator resolves again on the next poll.
+            pass
+        await asyncio.sleep(0.1)
+    raise RuntimeError(
+        f"OneBSS không cập nhật trạng thái checkbox thành {'đã chọn' if checked else 'bỏ chọn'}"
+    )
+
+
+async def _wait_for_onebss_overlay_clear(page: Page, timeout_ms: int) -> None:
+    """Wait until OneBSS's blocking overlay no longer intercepts UI actions."""
+    await page.wait_for_function(
+        """() => !Array.from(document.querySelectorAll('.overlay-common.show'))
+            .some(element => {
+                const style = getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return style.display !== 'none'
+                    && style.visibility !== 'hidden'
+                    && style.pointerEvents !== 'none'
+                    && rect.width > 0 && rect.height > 0;
+            })""",
+        timeout=timeout_ms,
+    )
+
+
+async def _paste_text_from_clipboard(page: Page, text: str) -> None:
+    """Paste clipboard text into the focused Google Sheets grid reliably."""
+    await page.bring_to_front()
+    await page.evaluate("text => navigator.clipboard.writeText(text)", text)
+    clipboard_text = await page.evaluate("() => navigator.clipboard.readText()")
+    if clipboard_text != text:
+        raise RuntimeError("Clipboard không giữ đúng dữ liệu cần ghi vào Google Sheet")
+    await page.keyboard.press("Control+V" if os.name == "nt" else "Meta+V")
 
 
 async def _row_with_normalized_text(rows: Locator, wanted: str, timeout_ms: int) -> Locator:
@@ -995,6 +1032,7 @@ class OneBSSClient:
             wait_until="domcontentloaded", timeout=timeout_ms
         )
         await self.page.wait_for_selector("#frmGiaoViecVIP", timeout=timeout_ms)
+        await _wait_for_onebss_overlay_clear(self.page, timeout_ms)
         await self.page.wait_for_timeout(1_000)
         await self.ensure_unassigned_filters()
         await self.refresh_tickets()
@@ -1093,6 +1131,9 @@ class OneBSSClient:
     async def ensure_assignment_filters(self, assignment_status: str) -> None:
         """Disable employee filtering and select Chưa giao/Tất cả."""
         assert self.page
+        await _wait_for_onebss_overlay_clear(
+            self.page, self.session.config.timeout_ms
+        )
         summary = self.page.locator("#frmGiaoViecVIP .form-control.bold").filter(
             has_text="Lọc theo nhân viên"
         ).first
@@ -2422,8 +2463,7 @@ class GoogleSheetClient:
                 )
                 for row in sheet_rows
             )
-            await page.evaluate("text => navigator.clipboard.writeText(text)", tsv)
-            await page.keyboard.press("Meta+V")
+            await _paste_text_from_clipboard(page, tsv)
 
             # Verify only the rows pasted in this attempt. A failed/partial
             # paste is retried at the newly calculated first free row, so a
@@ -2517,12 +2557,7 @@ class GoogleSheetClient:
             ):
                 await name_box.fill("L1")
                 await name_box.press("Enter")
-                await page.evaluate(
-                    "text => navigator.clipboard.writeText(text)", HEADER[-1]
-                )
-                await page.keyboard.press(
-                    "Control+V" if os.name == "nt" else "Meta+V"
-                )
+                await _paste_text_from_clipboard(page, HEADER[-1])
                 deadline = asyncio.get_running_loop().time() + 10
                 while asyncio.get_running_loop().time() < deadline:
                     await asyncio.sleep(1)

@@ -489,9 +489,38 @@ def test_recover_browser_restarts_context_when_page_reload_fails(monkeypatch):
     assert calls == ["restart", "open-sheet", "open-onebss"]
     assert sheet.page is None
     sheet.open.assert_awaited_once()
-    cli.sync_pending.assert_awaited_once()
+    cli.sync_pending.assert_not_awaited()
     onebss.ensure_unassigned_filters.assert_awaited_once()
     onebss.refresh_tickets.assert_awaited_once()
+
+
+def test_recover_browser_keeps_onebss_available_when_sheet_tab_fails(monkeypatch):
+    class FakeSession:
+        async def restart_context(self):
+            pass
+
+    page = SimpleNamespace(wait_for_selector=AsyncMock())
+    onebss = SimpleNamespace(
+        page=page,
+        reload_for_recovery=AsyncMock(side_effect=RuntimeError("overlay stuck")),
+        ensure_unassigned_filters=AsyncMock(),
+        refresh_tickets=AsyncMock(),
+    )
+    async def open_onebss():
+        onebss.page = page
+
+    onebss.open = AsyncMock(side_effect=open_onebss)
+    sheet = SimpleNamespace(page=None, open=AsyncMock(side_effect=RuntimeError("sheet offline")))
+    monkeypatch.setattr(cli, "sync_pending", AsyncMock())
+
+    asyncio.run(cli.recover_browser(
+        SimpleNamespace(timeout_ms=30_000), FakeSession(), onebss,
+        sheet, object(), object(),
+    ))
+
+    onebss.ensure_unassigned_filters.assert_awaited_once()
+    onebss.refresh_tickets.assert_awaited_once()
+    cli.sync_pending.assert_not_awaited()
 def test_completed_duplicate_is_released_when_visible_count_decreases():
     processed = {"GD1|TB1", "GD2|TB2"}
     cli._release_completed_occurrences(

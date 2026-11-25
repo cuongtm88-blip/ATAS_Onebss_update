@@ -12,7 +12,9 @@ from ats_onebss.browser import (
     _province_from_address,
     _project_details_from_api,
     _row_matches_ticket,
+    _set_hidden_checkbox,
     _ticket_metadata_from_api,
+    _wait_for_onebss_overlay_clear,
 )
 from ats_onebss.models import ProjectRoute, ProjectRule, ServiceRule, Ticket
 
@@ -286,6 +288,7 @@ def test_onebss_reload_for_recovery_rebuilds_unassigned_queue():
         is_closed=lambda: False,
         reload=AsyncMock(),
         wait_for_selector=AsyncMock(),
+        wait_for_function=AsyncMock(),
         wait_for_timeout=AsyncMock(),
     )
     config = SimpleNamespace(timeout_ms=30000)
@@ -304,6 +307,34 @@ def test_onebss_reload_for_recovery_rebuilds_unassigned_queue():
     )
     client.ensure_unassigned_filters.assert_awaited_once()
     client.refresh_tickets.assert_awaited_once()
+
+
+def test_set_hidden_checkbox_waits_for_async_syncfusion_state():
+    class Checkbox:
+        def __init__(self):
+            self.checked = False
+            self.reads = 0
+
+        async def evaluate(self, _script, wanted):
+            self.checked = wanted
+
+        async def is_checked(self):
+            self.reads += 1
+            return self.checked if self.reads >= 3 else not self.checked
+
+    checkbox = Checkbox()
+    asyncio.run(_set_hidden_checkbox(checkbox, True))
+    assert checkbox.checked is True
+    assert checkbox.reads >= 3
+
+
+def test_onebss_overlay_wait_checks_interaction_blocking_visibility():
+    page = SimpleNamespace(wait_for_function=AsyncMock())
+    asyncio.run(_wait_for_onebss_overlay_clear(page, 12_000))
+    script, = page.wait_for_function.await_args.args
+    assert "pointerEvents !== 'none'" in script
+    assert "rect.width > 0" in script
+    assert page.wait_for_function.await_args.kwargs["timeout"] == 12_000
 
 
 def test_reads_contract_type_from_raw_onebss_response():

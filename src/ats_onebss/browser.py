@@ -1191,34 +1191,37 @@ class OneBSSClient:
             )
         if not await panel.is_visible():
             await summary.click()
-        checkbox = panel.locator("#chkLoc")
-        if await checkbox.is_checked():
-            await checkbox.uncheck()
-        # Use the visible Select2 widget so Vue receives the same event sequence
-        # as a human selection. The hidden native select alone does not update
-        # this page's model reliably.
+        # Set the assignment status before disabling the employee filter. Doing
+        # this in the opposite order makes OneBSS load every assigned ticket
+        # while status is still Tất cả; its loading overlay can remain over
+        # Select2 long enough for the next click to time out.
         assignment_select = panel.locator("select").nth(1)
         selected_text = ""
         checked_option = assignment_select.locator("option:checked")
         if await checked_option.count():
             selected_text = (await checked_option.inner_text()).strip()
-        if normalize(selected_text) == normalize(assignment_status):
-            if await panel.is_visible():
-                await panel.evaluate("element => element.style.display = 'none'")
-            if await backdrop.count():
-                await backdrop.evaluate_all(
-                    "elements => elements.forEach(element => element.style.display = 'none')"
-                )
-            return
-        assignment_widget = assignment_select.locator(
-            "xpath=following-sibling::span[contains(@class, 'select2-container')]"
-        )
-        await (await _visible(assignment_widget)).click()
-        option = self.page.locator(
-            ".select2-container--open .select2-results__option",
-            has_text=assignment_status,
-        )
-        await (await _visible(option)).click()
+        if normalize(selected_text) != normalize(assignment_status):
+            # The hidden native select alone does not reliably update Vue.
+            assignment_widget = assignment_select.locator(
+                "xpath=following-sibling::span[contains(@class, 'select2-container')]"
+            )
+            await (await _visible(assignment_widget)).click()
+            option = self.page.locator(
+                ".select2-container--open .select2-results__option",
+                has_text=assignment_status,
+            )
+            await (await _visible(option)).click()
+            await _wait_for_onebss_overlay_clear(
+                self.page, self.session.config.timeout_ms
+            )
+        checkbox = panel.locator("#chkLoc")
+        if await checkbox.is_checked():
+            if not await panel.is_visible():
+                await summary.click()
+            await checkbox.uncheck()
+            await _wait_for_onebss_overlay_clear(
+                self.page, self.session.config.timeout_ms
+            )
         # This legacy component has no working close action: neither its
         # summary nor backdrop closes it once open. The selected value has
         # already updated Vue, so hide only the popup UI and its backdrop.

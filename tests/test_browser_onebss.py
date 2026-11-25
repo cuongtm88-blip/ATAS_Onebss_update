@@ -2,7 +2,7 @@ import asyncio
 import ats_onebss.browser as browser_module
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from ats_onebss.browser import (
     BrowserProfileInUseError,
@@ -386,6 +386,77 @@ def test_assignment_filters_reload_once_after_stuck_overlay(monkeypatch):
     page.wait_for_selector.assert_awaited_once_with(
         "#frmGiaoViecVIP", timeout=15_000
     )
+
+
+def test_unassigned_status_is_selected_before_employee_filter_is_disabled(monkeypatch):
+    events = []
+    summary = MagicMock()
+    summary.first = summary
+    summary.filter.return_value = summary
+    summary.click = AsyncMock()
+    panel = MagicMock()
+    panel.first = panel
+    panel.is_visible = AsyncMock(return_value=True)
+    panel.evaluate = AsyncMock()
+    backdrop = MagicMock()
+    backdrop.count = AsyncMock(return_value=1)
+    backdrop.is_visible = AsyncMock(return_value=True)
+    backdrop.evaluate_all = AsyncMock()
+    checkbox = MagicMock()
+    checkbox.is_checked = AsyncMock(return_value=True)
+
+    async def uncheck():
+        events.append("uncheck employee filter")
+
+    checkbox.uncheck = uncheck
+    checked_option = MagicMock()
+    checked_option.count = AsyncMock(return_value=1)
+    checked_option.inner_text = AsyncMock(return_value="Tất cả")
+    widget = MagicMock()
+    widget.click = AsyncMock()
+    select = MagicMock()
+    select.locator.side_effect = lambda selector: (
+        checked_option if selector == "option:checked" else widget
+    )
+    selects = MagicMock()
+    selects.nth.return_value = select
+    panel.locator.side_effect = lambda selector: (
+        checkbox if selector == "#chkLoc" else selects
+    )
+    option = MagicMock()
+
+    async def select_unassigned():
+        events.append("select unassigned")
+
+    option.click = select_unassigned
+    page = MagicMock()
+    page.locator.side_effect = lambda selector, **_kwargs: {
+        "#frmGiaoViecVIP .form-control.bold": summary,
+        "#frmGiaoViecVIP .popupContainerControl1": panel,
+        "#frmGiaoViecVIP .popupContainerControl1Drop": backdrop,
+        ".select2-container--open .select2-results__option": option,
+    }[selector]
+
+    async def wait_overlay(_page, _timeout):
+        events.append("wait for loading")
+
+    async def visible(locator):
+        return locator
+
+    monkeypatch.setattr(browser_module, "_wait_for_onebss_overlay_clear", wait_overlay)
+    monkeypatch.setattr(browser_module, "_visible", visible)
+    client = OneBSSClient(SimpleNamespace(config=SimpleNamespace(timeout_ms=30_000)))
+    client.page = page
+
+    asyncio.run(client.ensure_assignment_filters("Chưa giao"))
+
+    assert events == [
+        "wait for loading",
+        "select unassigned",
+        "wait for loading",
+        "uncheck employee filter",
+        "wait for loading",
+    ]
 
 
 def test_reads_contract_type_from_raw_onebss_response():

@@ -771,3 +771,26 @@ def test_percentage_routing_does_not_change_other_services():
 
     assert len({item.assignees for item in result}) == 1
     assert all(item.cohort_key for item in result)
+
+
+def test_stale_sheet_cohort_owner_is_skipped_without_stopping_other_tickets():
+    rule = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (Member("An", "Nhóm 1", "Chính"), Member("Bình", "Nhóm 1", "Chính")),
+    )
+    conflict = Ticket(
+        "GD1", "TB1", "Fiber", customer_name="Khách hàng A",
+        labor_address="1 Lê Lợi",
+    )
+    independent = Ticket("GD2", "TB2", "Fiber")
+    skipped = {}
+
+    result = plan_assignments(
+        [conflict, independent], [rule],
+        preferred_assignees={"gd1|tb1": ("Lương Tuấn Thanh",)},
+        skipped_reasons=skipped,
+    )
+
+    assert [item.ticket.key for item in result] == [independent.key]
+    assert "Lương Tuấn Thanh" in skipped[conflict.key]
+    assert "workbook" in skipped[conflict.key]

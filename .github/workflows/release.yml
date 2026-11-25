@@ -42,14 +42,14 @@ jobs:
           ditto -x -k "$zip" "$check_dir"
           extracted="$check_dir/ATS-OneBSS-${version}.app"
           codesign --verify --deep --strict "$extracted"
-          test -f "$extracted/Contents/Frameworks/assignment_rules.xlsx"
-          test -f "$extracted/Contents/Frameworks/project_rules.toml"
+          test -f "$extracted/Contents/Resources/assignment_rules.xlsx"
+          test -f "$extracted/Contents/Resources/project_rules.toml"
           ! find "$extracted" -iname 'Giao phiếu_demo2.xlsx' -print -quit | grep -q .
-          grep -q '^file = "Giao phiếu.xlsx"$' "$extracted/Contents/Frameworks/config.toml"
-          grep -q '^read_batch_size = 20$' "$extracted/Contents/Frameworks/config.toml"
-          grep -q '^read_batch_threshold = 50$' "$extracted/Contents/Frameworks/config.toml"
-          grep -q 'Cục Tin Học Và Thống Kê Tài Chính' "$extracted/Contents/Frameworks/project_rules.toml"
-          uv run python -c 'from ats_onebss.rules import load_rules; from pathlib import Path; import sys; rules=load_rules(Path(sys.argv[1])); assert len(rules) == 69; print(f"Verified packaged rules: {len(rules)}")' "$extracted/Contents/Frameworks/assignment_rules.xlsx"
+          grep -q '^file = "Giao phiếu.xlsx"$' "$extracted/Contents/Resources/config.toml"
+          grep -q '^read_batch_size = 20$' "$extracted/Contents/Resources/config.toml"
+          grep -q '^read_batch_threshold = 50$' "$extracted/Contents/Resources/config.toml"
+          grep -q 'Cục Tin Học Và Thống Kê Tài Chính' "$extracted/Contents/Resources/project_rules.toml"
+          uv run python -c 'from ats_onebss.rules import load_rules; from pathlib import Path; import sys; rules=load_rules(Path(sys.argv[1])); assert len(rules) == 69; print(f"Verified packaged rules: {len(rules)}")' "$extracted/Contents/Resources/assignment_rules.xlsx"
           uv run python - "$extracted" <<'PY'
           from pathlib import Path
           import tempfile
@@ -80,6 +80,12 @@ jobs:
               assert plan_assignments and {
                   "SMS Brandname", "Tạo đơn hàng trả trước", "Lê Đức Tuấn",
               } <= set(plan_assignments.co_consts)
+              assert plan_assignments and "invalid_sheet_cohort_keys" in plan_assignments.co_varnames
+              assert plan_assignments and any(
+                  isinstance(value, str)
+                  and "khớp nhân sự đang có trong workbook" in value
+                  for value in plan_assignments.co_consts
+              )
               browser = archive.extract("ats_onebss.browser")
               attendance = archive.extract("ats_onebss.attendance")
               attendance_ui = archive.extract("ats_onebss.attendance_ui")

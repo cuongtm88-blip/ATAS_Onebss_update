@@ -309,9 +309,9 @@ def test_current_percentage_workbook_expands_service_map_and_preserves_api_flags
     sip = match_rule(rules, Ticket("GD1", "TB1", "ISDN 30B+D cáp đồng"))
     assert sip.sheet_service == "SIP"
     assert {member.name: member.target_share for member in sip.members} == {
-        "Nguyễn Hoàng Dương": Decimal("0.33"),
-        "Trần Thị Thu Hằng": Decimal("0.34"),
-        "Lê Đức Tuấn": Decimal("0.33"),
+        "Nguyễn Hoàng Dương": Decimal("0.20"),
+        "Trần Thị Thu Hằng": Decimal("0.70"),
+        "Lê Đức Tuấn": Decimal("0.10"),
     }
     fiber = match_rule(rules, Ticket("GD2", "TB2", "Mega"))
     assert fiber.sheet_service == "Fiber"

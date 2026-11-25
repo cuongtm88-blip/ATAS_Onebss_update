@@ -182,6 +182,7 @@ def plan_assignments(
     # preserve its recorded assignee as the cohort anchor unless we already
     # have a successful assignment saved locally.
     sheet_cohort_pins: dict[str, str] = {}
+    invalid_sheet_cohort_keys: set[str] = set()
     # Mega LT/NT tickets can represent two points for the same customer when
     # one ticket's Hướng kết nối names the other ticket's subscriber ID.
     # Pair only unique subscriber matches within the same customer and group.
@@ -251,15 +252,33 @@ def plan_assignments(
             ticket_identity(ticket.transaction_id, ticket.subscriber_id)
         )
         if key and prior:
-            sheet_cohort_pins.setdefault(
-                key, canonical_member_name(rules, prior[0])
-            )
+            try:
+                canonical_owner = canonical_member_name(rules, prior[0])
+            except RuleError as error:
+                # A stale Sheet owner is a conflict for this ticket, not a
+                # reason to abort planning for the entire queue. Keep it in
+                # the unassigned report and do not let its stale owner pin
+                # other tickets in the same cohort.
+                if skipped_reasons is not None:
+                    skipped_reasons[ticket.key] = (
+                        f"Người nhận cũ trên Google Sheet ({prior[0]}) không "
+                        f"khớp nhân sự đang có trong workbook: {error}"
+                    )
+                invalid_sheet_cohort_keys.add(key)
+                sheet_cohort_pins.pop(key, None)
+                continue
+            if key not in invalid_sheet_cohort_keys:
+                sheet_cohort_pins.setdefault(key, canonical_owner)
     # The authoritative Sheet owner for any cohort represented in this queue
     # takes precedence over the local affinity cache.
+    for key in invalid_sheet_cohort_keys:
+        cohort_pins.pop(key, None)
     cohort_pins.update(sheet_cohort_pins)
 
     for ticket in tickets:
-        if ticket.key in completed:
+        if ticket.key in completed or (
+            skipped_reasons is not None and ticket.key in skipped_reasons
+        ):
             continue
         identity = ticket_identity(ticket.transaction_id, ticket.subscriber_id)
         preferred = preferred_assignees.get(identity)
@@ -293,9 +312,19 @@ def plan_assignments(
         if not rule.write_to_sheet:
             preferred = None
         elif preferred and not manual_assignee:
-            preferred = tuple(
-                canonical_member_name(rules, assignee) for assignee in preferred
-            )
+            try:
+                preferred = tuple(
+                    canonical_member_name(rules, assignee)
+                    for assignee in preferred
+                )
+            except RuleError as error:
+                if skipped_reasons is None:
+                    raise
+                skipped_reasons[ticket.key] = (
+                    f"Người nhận cũ trên Google Sheet ({', '.join(preferred)}) "
+                    f"không khớp nhân sự đang có trong workbook: {error}"
+                )
+                continue
             if (
                 not sms_prepaid_route
                 and any(normalize(assignee) in excluded for assignee in preferred)

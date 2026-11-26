@@ -77,6 +77,15 @@ jobs:
               plan_assignments = find_code(
                   archive.extract("ats_onebss.planner"), "plan_assignments"
               )
+              manual_history_bypass = find_code(
+                  archive.extract("ats_onebss.planner"),
+                  "_manual_assignee_bypasses_cohort_history",
+              )
+              assert manual_history_bypass is not None
+              assert plan_assignments and (
+                  "_manual_assignee_bypasses_cohort_history"
+                  in plan_assignments.co_names
+              )
               assert plan_assignments and {
                   "SMS Brandname", "Tạo đơn hàng trả trước", "Lê Đức Tuấn",
               } <= set(plan_assignments.co_consts)
@@ -204,5 +213,6 @@ jobs:
             - Áp dụng hệ số điểm dự án 1,2; đồng bộ công thức ngày/tháng và hỗ trợ chỉ định nhiều phiếu chưa giao.
             - Phục hồi Chromium khi tab Google Sheets crash trong lúc đồng bộ lịch, sau đó tiếp tục mở OneBSS.
             - Phiếu SMS Brandname có Kiểu lắp đặt “Tạo đơn hàng trả trước” được giao cố định cho Lê Đức Tuấn, không phụ thuộc VIP xử lý.
+            - Chỉ định thủ công phiếu chưa giao được ưu tiên trước lịch sử người nhận cũ trên Google Sheet.
             - Mục tiêu tải theo lịch nghỉ chỉ giảm từ ngày nghỉ thực tế; ngày nghỉ tương lai chưa làm giảm mục tiêu.
             - Sửa xóa lịch nghỉ theo đúng bản ghi gốc khi danh sách đang lọc theo tháng.

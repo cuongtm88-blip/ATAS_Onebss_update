@@ -18,6 +18,13 @@ from .text import assignment_cohort_key, normalize, ticket_identity, unaccent
 from .ticket_region import sheet_count_status
 
 
+def _manual_assignee_bypasses_cohort_history(
+    ticket: Ticket, manual_assignees: dict[str, str],
+) -> bool:
+    """Manual routing must not be rejected by a stale Sheet cohort owner."""
+    return bool(manual_assignees.get(ticket.key))
+
+
 def plan_assignments(
     tickets: list[Ticket],
     rules: list[ServiceRule],
@@ -225,6 +232,11 @@ def plan_assignments(
         connection_pair_keys[other.key] = pair_key
         paired.update(pair)
     for ticket in tickets:
+        # A per-ticket manual route supersedes Google Sheet history for this
+        # ticket. Do not reject it here while trying to establish a cohort
+        # pin: the historical owner may no longer exist in the workbook.
+        if _manual_assignee_bypasses_cohort_history(ticket, manual_assignees):
+            continue
         if (
             normalize(ticket.service_type or ticket.service)
             == normalize("SMS Brandname")

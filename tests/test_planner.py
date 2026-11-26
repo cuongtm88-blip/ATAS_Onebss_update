@@ -249,6 +249,31 @@ def test_manual_assignee_overrides_project_rules_and_leave_exclusion_for_one_tic
     assert result[0].manual_override is True
 
 
+def test_manual_assignee_bypasses_stale_sheet_cohort_owner():
+    rule = ServiceRule(
+        3, "Fiber", Decimal("17"), "",
+        (Member("Đặng Văn Minh", "Nhóm 1", "Chính"),),
+    )
+    ticket = Ticket(
+        "VNP-LD/00081137", "fbr00sqnu", "Fiber",
+        customer_name="CÔNG TY TNHH MỘT THÀNH VIÊN VIỄN THÔNG QUỐC TẾ FPT",
+        labor_address="Tầng 1 TTTM Victory, 392, Phố Lý Bôn, Phường Trần Hưng Đạo, Tỉnh Hưng Yên",
+    )
+    skipped = {}
+
+    result = plan_assignments(
+        [ticket], [rule],
+        preferred_assignees={ticket.key: ("Lương Tuấn Thanh",)},
+        manual_assignees={ticket.key: "Đặng Văn Minh"},
+        skipped_reasons=skipped,
+    )
+
+    assert len(result) == 1
+    assert result[0].assignees == ("Đặng Văn Minh",)
+    assert result[0].manual_override is True
+    assert skipped == {}
+
+
 def test_excluded_member_is_removed_from_normal_balancing():
     rule = ServiceRule(
         3, "Fiber", Decimal("17"), "",
